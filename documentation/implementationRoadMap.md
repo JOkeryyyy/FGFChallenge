@@ -8,7 +8,7 @@ The revised target is:
 
 > Fetch the complete remote snapshot once per app launch, validate it, atomically replace the local Room snapshot, query Room with all active search and filter conditions, display the newest 100 matching logs first, and progressively load additional matching logs in pages of 100.
 
-[`requirement.md`](requirement.md), [`api_and_requirement_gap_assumptions.md`](api_and_requirement_gap_assumptions.md), [`UIWireframe.png`](UIWireframe.png), and [`ARCHITECTURE.md`](ARCHITECTURE.md) remain the repository's documentation authority in that order. However, they still describe the previous 5k in-memory design and currently conflict with this approved large-dataset revision. Step 6 must align those documents before revised implementation begins. Until then, this roadmap records the approved migration direction but does not silently override the documented conflict.
+[`requirement.md`](requirement.md), [`api_and_requirement_gap_assumptions.md`](api_and_requirement_gap_assumptions.md), [`UIWireframe.png`](UIWireframe.png), and [`ARCHITECTURE.md`](ARCHITECTURE.md) remain the repository's documentation authority in that order. Step 6 aligned all four with the approved large-dataset revision; this roadmap now sequences implementation without overriding those product and architecture contracts.
 
 This roadmap deliberately defines coherent milestones, responsibilities, and exit goals rather than dependency versions, exact source files, or commit-sized implementation steps.
 
@@ -21,7 +21,8 @@ This roadmap deliberately defines coherent milestones, responsibilities, and exi
 | 3. Fixture-backed screen UI | Complete | Full screen states, flat grouped list, responsive layouts, and visual tests. |
 | 4. Basic UI interaction | Complete | Immutable state/actions, ViewModel, sort/query input, and details-sheet interaction. |
 | 5. Network foundation and repository boundary | Complete baseline | Retrofit/OkHttp, endpoint, DTO mapping, one feature-local typed repository failure, cancellation preservation, Hilt wiring, and repository tests. This one-source repository contract is transitional and is expanded in Step 8. |
-| 6–13. Large-dataset revision | Not started | Documentation alignment, Room, Paging 3, combined queries, domain orchestration, updated UI, performance validation, and final verification. |
+| 6. Product and architecture contract alignment | Complete | Requirement, assumptions, wireframe, architecture, data convention, and contributor guidance now describe one approximately 100k Room/Paging system. |
+| 7–13. Large-dataset implementation | Not started | Room, Paging 3, combined queries, refresh coordination, domain orchestration, updated UI, performance validation, and final verification. |
 
 ## Revised Target Architecture
 
@@ -118,18 +119,19 @@ The architecture must preserve these invariants:
 
 - Transport types and exceptions stop at the data boundary. This milestone remains reusable as the remote side of the Room-backed repository introduced in Step 8.
 
-### 6. Align the revised product and architecture contracts
+### 6. Align the revised product and architecture contracts — Complete
 
-**Work**
+**Work delivered**
 
-- Revise the authoritative requirement, assumptions, architecture, and wireframe documents to replace the previous 5k in-memory position with the approved approximately 100k Room/Paging design.
-- Record the exact search scope: case-insensitive literal substring matching over `message` and `id` only.
-- Record the structured-filter semantics: AND between categories, OR/`IN` within multi-select categories, and no predicate for an inactive category.
-- Define the default as no search or filters, newest-first ordering, and the most recent 100 matching records as the initial page.
-- Define startup refresh as one complete network request per app launch followed by an atomic Room snapshot replacement. Retry is explicit after failure.
-- Define result count, severity counts, and error density as aggregates over the complete filtered database result rather than the loaded pages.
-- Replace the former Room, pagination, and database-query non-goals. Keep remote pagination, streaming, runtime AI, vector search, anomaly detection, analytics, and production observability out of scope.
-- Update the wireframe for filter entry, active-filter indication, filter controls, Paging load states, and aggregate-summary behavior before UI implementation.
+- Revised the authoritative requirement, assumptions, architecture, and wireframe documents to replace the previous 5k in-memory position with the approved approximately 100k Room/Paging design.
+- Recorded the exact search scope: case-insensitive literal substring matching over `message` and `id` only.
+- Recorded the structured-filter semantics: AND between categories, OR/`IN` within multi-select categories, and no predicate for an inactive category.
+- Defined the default as no search or filters, newest-first ordering, and the most recent 100 matching records as the initial page.
+- Defined startup refresh as one complete network request per app launch followed by an atomic Room snapshot replacement. Retry is explicit after failure.
+- Defined result count, severity counts, and error density as aggregates over the complete filtered database result rather than the loaded pages.
+- Replaced the former Room, pagination, and database-query non-goals. Kept remote pagination, streaming, runtime AI, vector search, anomaly detection, analytics, and production observability out of scope.
+- Updated the wireframe for startup refresh/error, filter entry, active-filter indication, filter controls, Paging load states, no results, details, and aggregate-summary behavior before UI implementation.
+- Aligned the project-specific data-layer convention and `AGENTS.md` guidance so later contributors receive the same contract.
 
 **Exit goal**
 

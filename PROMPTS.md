@@ -148,3 +148,8 @@ Code quality: use ktlint on every commit
 - Tool: CODEX
 - Task: Revise the implementation roadmap for the approved approximately 100k Room-backed, locally paginated log viewer while preserving the completed Step 1–5 baseline.
 - Key prompt: Update `documentation/implementationRoadMap.md` to define what the network/data layer, smallest justified optional domain layer, and UI layer must change and what each layer must achieve. Treat Room as the source of truth, refresh and atomically replace the full snapshot on every app launch, use Paging 3 with 100-row initial/subsequent pages and prefetch, combine structured filters with database-backed search, and calculate result/severity aggregates over the complete filtered result.
+
+- Date: 2026-08-17
+- Tool: CODEX
+- Task: Complete roadmap Step 6 by aligning the revised product, assumptions, architecture, contributor guidance, and low-fidelity UI wireframe.
+- Key prompt: According to the new `documentation/implementationRoadMap.md`, finish “6. Align the revised product and architecture contracts.” Replace the superseded 5k in-memory rules with the approved approximately 100k Room/Paging contract; define message/ID literal search, structured-filter AND/OR semantics, one atomic launch refresh, 100-row Paging, full-result aggregates, revised load/filter/details states, retained non-goals, and a wireframe that makes those behaviors reviewable before implementation.
