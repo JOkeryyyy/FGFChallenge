@@ -33,3 +33,13 @@ Modularization: Network module for Retrofit infrastructure. UI Component module 
 UI components:  Severity indicators, network&tag Badge, search bar, app top bar, loading shimmer effect(might can be done by a modifier extension function), bottom sheet. 
 Testing: Need to decide weather to use mockk/mohito to mock the data, or use the testing repository. Screenshot testing using paparazzi. I do not think Espresso testing is required, justify this decision.
 Code quality: use ktlint on every commit 
+
+- Date: 2026-08-16
+- Tool: CODEX
+- Task: Create a file-by-file implementation plan for the Android project foundation milestone.
+- Key prompt: Plan the `:app`, `:feature:logs`, `:core:network`, and `:core:designsystem` foundation, including exact files, packages, function signatures, compatible dependencies, module rules, theme entry point, CI, pre-commit checks, and build/launch verification.
+
+- Date: 2026-08-16
+- Tool: Claude Code
+- Task: Implement the Android project foundation and verify its toolchain, module boundaries, quality gates, CI, and launch shell.
+- Key prompt: Execute plan `docs/superpowers/plans/2026-08-16-project-foundation.md`, preserving the four-module Hilt/Retrofit/Compose architecture and completing every verification gate before feature work.

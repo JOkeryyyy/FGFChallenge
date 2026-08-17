@@ -22,5 +22,11 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "FGF Challenge"
-include(":app")
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+rootProject.name = "fgf-challenge"
+include(
+    ":app",
+    ":core:designsystem",
+    ":core:network",
+    ":feature:logs",
+)
