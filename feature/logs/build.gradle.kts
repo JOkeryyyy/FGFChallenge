@@ -58,6 +58,9 @@ dependencies {
     // the `Context` and the SQLite implementation, so the queries under test are the real ones.
     testImplementation(libs.androidx.junit)
     testImplementation(libs.robolectric)
+    // Collects a `Flow<PagingData<…>>` into the rows a list would show, so the repository's paged
+    // stream can be asserted without a UI.
+    testImplementation(libs.androidx.paging.testing)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.junit)

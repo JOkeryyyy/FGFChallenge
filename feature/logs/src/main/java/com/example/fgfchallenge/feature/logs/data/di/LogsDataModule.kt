@@ -6,7 +6,7 @@ import com.example.fgfchallenge.feature.logs.data.local.LogsDao
 import com.example.fgfchallenge.feature.logs.data.local.LogsDatabase
 import com.example.fgfchallenge.feature.logs.data.remote.LogsApi
 import com.example.fgfchallenge.feature.logs.data.repository.LogsRepository
-import com.example.fgfchallenge.feature.logs.data.repository.NetworkLogsRepository
+import com.example.fgfchallenge.feature.logs.data.repository.SnapshotLogsRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -43,7 +43,7 @@ internal annotation class DefaultDispatcher
 internal abstract class LogsDataModule {
     @Binds
     @Singleton
-    abstract fun bindLogsRepository(repository: NetworkLogsRepository): LogsRepository
+    abstract fun bindLogsRepository(repository: SnapshotLogsRepository): LogsRepository
 
     companion object {
         /**
@@ -66,6 +66,10 @@ internal abstract class LogsDataModule {
         ): LogsDatabase =
             Room
                 .databaseBuilder(context, LogsDatabase::class.java, LogsDatabase.NAME)
+                // The stored snapshot is a cache of the last launch's response, so a schema change
+                // recreates the table instead of migrating it. This is the other half of
+                // `exportSchema = false`: without it, a version bump crashes on an existing install.
+                .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
 
         @Provides

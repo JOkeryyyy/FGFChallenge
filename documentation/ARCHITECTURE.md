@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-This document records the approved architecture for the revised Android take-home prototype. It replaces the original approximately 5,000-record in-memory design with a Room/Paging design that can remain bounded for larger snapshots; it does not impose a separate performance-benchmark delivery gate.
+This document records the approved architecture for the revised Android take-home prototype. It replaces the original approximately 5,000-record in-memory design with a Room/Paging design that can remain bounded for larger snapshots; performance exploration is an optional test rather than a delivery gate.
 
 Product decisions are authoritative in this order:
 
@@ -483,9 +483,9 @@ Network decoding, entity mapping, transaction work, and dynamic query work are m
 
 Import avoids additional full-size application/UI copies where bounded mapping or batched insertion can preserve the same transaction semantics.
 
-## Performance boundary
+## Optional performance test
 
-Keep the existing bounded Room/Paging design and avoid obvious main-thread work or full-result copies in `LogViewerUiState`. The supplied fixture is sufficient for a basic responsiveness check. A deterministic 100,000-record fixture, device/emulator benchmark, query-plan analysis, tuning cycle, and timing evidence are not delivery requirements.
+Keep the existing bounded Room/Paging design and avoid obvious main-thread work or full-result copies in `LogViewerUiState`. After the core flow works, a manual responsiveness check against the supplied fixture may be run if time permits. A deterministic 100,000-record fixture, device/emulator benchmark, query-plan analysis, tuning cycle, and timing evidence remain optional; neither running the test nor acting on its findings blocks acceptance.
 
 ## Verification strategy
 
@@ -494,8 +494,9 @@ Keep focused tests at the highest-value boundaries:
 1. Data/repository tests cover supported query behavior, a successful snapshot replacement, and a retryable refresh failure.
 2. ViewModel tests cover the principal loading/error/retry and selection paths.
 3. One representative Paparazzi screenshot test per screen demonstrates visual verification.
+4. An optional manual performance smoke test may record observations from the supplied fixture; it is not an acceptance gate.
 
-Existing instrumented tests remain in place, but no additional interaction or instrumented-test coverage is required. Fakes are preferred over mocking frameworks. CI continues its existing host-side checks without making device performance runs or a visual-state matrix delivery gates.
+Existing instrumented tests remain in place, but no additional interaction or instrumented-test coverage is required. Fakes are preferred over mocking frameworks. CI continues its existing host-side checks without making optional performance work or a visual-state matrix delivery gates.
 
 ## Commit-time quality gate
 

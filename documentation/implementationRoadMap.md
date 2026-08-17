@@ -22,7 +22,7 @@ This roadmap deliberately defines coherent milestones, responsibilities, and exi
 | 4. Basic UI interaction | Complete | Immutable state/actions, ViewModel, sort/query input, and details-sheet interaction. |
 | 5. Network foundation and repository boundary | Complete baseline | Retrofit/OkHttp, endpoint, DTO mapping, one feature-local typed repository failure, cancellation preservation, Hilt wiring, and repository tests. This one-source repository contract is transitional and is expanded in Step 8. |
 | 6. Product and architecture contract alignment | Complete | Requirement, assumptions, wireframe, architecture, data convention, and contributor guidance now describe one Room/Paging prototype system. |
-| 7–13. Query-driven implementation | Not started | Room, Paging 3, combined queries, refresh coordination, simple ViewModel coordination, updated UI, basic responsiveness checks, and focused verification. |
+| 7–13. Query-driven implementation | Not started | Room, Paging 3, combined queries, refresh coordination, simple ViewModel coordination, updated UI, an optional performance smoke test, and focused verification. |
 
 ## Revised Target Architecture
 
@@ -240,17 +240,17 @@ This one-screen prototype does not justify a standalone domain layer. Keep the i
 
 - A user can compose every supported condition, see which filters are active, receive full-result counts and density, and scroll beyond the first 100 matches without a visible page-boundary stall during normal use. The UI never computes database aggregates or assumes that loaded item count equals result count.
 
-### 12. Basic responsiveness check
+### 12. Optional performance smoke test
 
 **Work**
 
+- If time permits after the core flow works, exercise the supplied fixture manually and record any useful responsiveness observation.
 - Keep database, mapping, and import work off the main thread and avoid putting all matches in `UiState`.
-- Exercise the supplied fixture manually after the core flow works. Address only visible responsiveness problems that block the prototype demonstration.
 - Keep the initial parameterized Room/SQLite `LIKE` implementation; do not add alternate search technology, query-plan analysis, synthetic 100k data, or optimization work without an observed need.
 
 **Exit goal**
 
-- The supplied fixture supports the normal search, filter, list, and details demonstration without an obvious UI stall. No device benchmark or performance evidence is required.
+- If performed, the check may identify a follow-up improvement. Skipping it, omitting measurements, or deferring an optimization does not block Step 13, acceptance, or delivery.
 
 ### 13. Focused verification and delivery
 
@@ -260,7 +260,7 @@ This one-screen prototype does not justify a standalone domain layer. Keep the i
 - Keep ViewModel tests for the main loading/error/retry and details-selection paths.
 - Add one representative Paparazzi screenshot test per screen. The current instrumented coverage is sufficient; no additional interaction-test work is required.
 - Run the existing JVM checks, screenshot verification, lint, ktlint, and application assembly. Keep current instrumented-test compilation without expanding it into a new test initiative.
-- Update `README.md`, `PROMPTS.md`, screenshots or recording, setup instructions, and final delivery checks. Performance evidence is not required.
+- Update `README.md`, `PROMPTS.md`, screenshots or recording, setup instructions, and final delivery checks. Optional performance observations may be noted but are not required.
 
 **Exit goal**
 
