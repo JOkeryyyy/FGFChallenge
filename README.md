@@ -11,10 +11,16 @@ Despite the product name, this milestone and the overall prototype
 deliberately exclude runtime AI, semantic/vector search, anomaly detection,
 pagination, streaming, offline persistence, and production observability.
 
-This document covers the **project foundation milestone**: toolchain,
-module graph, dependency wiring, quality gates, and a verified launch shell.
-It does not cover feature UI, networking behavior, or business logic, which
-land in later roadmap milestones.
+This document covers work through the **fixture-backed screen milestone**: the
+toolchain, module graph, dependency wiring, and quality gates; the
+`:core:designsystem` component set; and the assembled log viewer screen with
+its loading, error, populated, filtered, and filtered-empty states.
+
+The screen is currently driven by sample fixture state, so its search, sort,
+retry, dismissal, and row-selection callbacks are deliberately inert, and the
+displayed totals describe the supplied dataset rather than the short
+representative row list rendered beneath them. Networking, mapping, the
+ViewModel, and real interaction land in later roadmap milestones.
 
 ## Prerequisites
 
@@ -39,7 +45,9 @@ checks; it never formats, modifies, or stages files.
 | --- | --- |
 | Assemble the debug app | `./gradlew :app:assembleDebug` |
 | Run JVM unit tests | `./gradlew testDebugUnitTest` |
-| Run Paparazzi visual verification | `./gradlew :core:designsystem:verifyPaparazziDebug` |
+| Verify design-system Paparazzi goldens | `./gradlew :core:designsystem:verifyPaparazziDebug` |
+| Verify log viewer screen Paparazzi goldens | `./gradlew :feature:logs:verifyPaparazziDebug` |
+| Re-record log viewer screen goldens after an intended visual change | `./gradlew :feature:logs:recordPaparazziDebug` |
 | Check Kotlin/Gradle formatting | `./gradlew ktlintCheck` |
 | Apply Kotlin/Gradle formatting | `./gradlew ktlintFormat` |
 | Run Android Lint | `./gradlew lintDebug` |

@@ -1,3 +1,25 @@
-<resources>
-    <string name="logs_feature_title">AI Semantic Log</string>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Screen shell -->
+    <string name="log_viewer_title">Semantic Logs</string>
+
+    <!-- Result count and sort row. The count is pre-grouped ("5,000") before it is inserted. -->
+    <plurals name="log_viewer_result_count">
+        <item quantity="one">%1$s result</item>
+        <item quantity="other">%1$s results</item>
+    </plurals>
+    <string name="log_viewer_sort_newest_first">Newest first</string>
+    <string name="log_viewer_sort_action">Change sort order</string>
+
+    <!-- Severity summary card -->
+    <!-- "percent" does not inflect in English, so a <plurals> resource adds no value here. -->
+    <string name="log_viewer_error_density" tools:ignore="PluralsCandidate">%1$d%% Error Density</string>
+    <string name="log_viewer_error_density_caption">ERROR + FATAL / visible logs</string>
+
+    <!-- Retryable load failure -->
+    <string name="log_viewer_error_title">Unable to load logs</string>
+    <string name="log_viewer_error_message">We couldn\'t fetch logs from the server.</string>
+
+    <!-- Filtered-empty result -->
+    <string name="log_viewer_no_results_title">No matching logs</string>
+    <string name="log_viewer_no_results_message">Try a different search term.</string>
 </resources>
