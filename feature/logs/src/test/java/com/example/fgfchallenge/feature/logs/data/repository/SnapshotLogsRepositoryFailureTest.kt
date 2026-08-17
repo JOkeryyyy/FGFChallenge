@@ -69,19 +69,18 @@ class SnapshotLogsRepositoryFailureTest {
     fun `undecodable payload is a data failure`() = assertContained(SerializationException("bad json"))
 
     /**
-     * The one failure the endpoint cannot stage: the response arrives and maps cleanly, and the
-     * write itself then fails. Two entries sharing an ID is the deterministic way to reach it —
-     * the payload is structurally and semantically valid, and the primary key rejects it mid-insert.
+     * A served payload with two entries sharing an ID is not corrupt input: it is structurally and
+     * semantically valid, and the later entry simply replaces the earlier one in the stored
+     * snapshot rather than failing the write.
      */
     @Test
-    fun `a database write failure is contained and rolls back`() {
+    fun `a payload with duplicate ids succeeds and keeps the later entry`() {
         runLogsRepositoryTest(DuplicateIdLogsApi) { repository, dao ->
             dao.replaceSnapshot(SNAPSHOT)
 
-            assertThat(repository.refreshSnapshot()).isEqualTo(Result.Error(LogsDataError))
-            // The deletion is part of the same transaction, so a failed insert cannot leave the
-            // previous snapshot half-removed.
-            assertThat(dao.count()).isEqualTo(SNAPSHOT.size)
+            assertThat(repository.refreshSnapshot()).isEqualTo(Result.Success(Unit))
+            assertThat(dao.count()).isEqualTo(1)
+            assertThat(dao.logById("log-1")?.message).isEqualTo("Connection timed out, retried")
         }
     }
 
@@ -113,12 +112,13 @@ private class ThrowingLogsApi(
 }
 
 /**
- * Serves a payload that decodes and maps cleanly but cannot be stored: both entries claim the same
- * ID, which the primary key rejects part-way through the insert.
+ * Serves a payload that decodes and maps cleanly, with two entries claiming the same ID so the
+ * conflict-replace insert has something to resolve. The second entry's message differs from the
+ * first so the surviving row is identifiable.
  */
 private object DuplicateIdLogsApi : LogsApi {
     override suspend fun getLogs(): Response<LogsPayloadDto> {
-        val entry =
+        val first =
             LogEntryDto(
                 id = "log-1",
                 timestamp = "2026-08-16T17:10:05Z",
@@ -127,8 +127,9 @@ private object DuplicateIdLogsApi : LogsApi {
                 message = "Connection timed out",
                 metadata = LogMetadataDto(latencyMs = 2040, isAiGenerated = true),
             )
+        val second = first.copy(message = "Connection timed out, retried")
         return Response.success(
-            LogsPayloadDto(totalCount = 2, sessionId = "session-666", entries = listOf(entry, entry)),
+            LogsPayloadDto(totalCount = 2, sessionId = "session-666", entries = listOf(first, second)),
         )
     }
 }

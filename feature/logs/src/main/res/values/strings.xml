@@ -11,6 +11,13 @@
     <string name="log_viewer_sort_oldest_first">Oldest first</string>
     <string name="log_viewer_sort_action">Change sort order</string>
 
+    <!-- Filter entry. The badge shows the bare count; this describes it for a screen reader. -->
+    <string name="log_viewer_filter_action">Filter</string>
+    <plurals name="log_viewer_active_filter_count">
+        <item quantity="one">%1$d active filter</item>
+        <item quantity="other">%1$d active filters</item>
+    </plurals>
+
     <!-- Severity summary card -->
     <!-- "percent" does not inflect in English, so a <plurals> resource adds no value here. -->
     <string name="log_viewer_error_density" tools:ignore="PluralsCandidate">%1$d%% Error Density</string>

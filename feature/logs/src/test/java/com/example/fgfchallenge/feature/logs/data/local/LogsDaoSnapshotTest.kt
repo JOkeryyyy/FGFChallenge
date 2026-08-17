@@ -59,18 +59,47 @@ class LogsDaoSnapshotTest {
         }
 
     @Test
-    fun `a failed replacement rolls back to the previous snapshot`() =
+    fun `duplicate ids replace the previous row within the new snapshot`() =
         withDatabase { dao ->
-            dao.replaceSnapshot(SNAPSHOT)
-            // Two rows with the same primary key: the insert fails part-way, after the delete.
-            val duplicated = listOf(LogsTestFixture.ERROR_DB_TIMEOUT, LogsTestFixture.ERROR_DB_TIMEOUT)
+            // Two rows share id "log-abc"; the later one in insertion order should win.
+            val duplicated =
+                listOf(
+                    LogsTestFixture.entity(
+                        id = "log-abc",
+                        timestamp = "2026-08-16T17:10:00Z",
+                        severity = "ERROR",
+                        tag = "db",
+                        message = "first",
+                        latencyMs = 10,
+                        isAiGenerated = false,
+                    ),
+                    LogsTestFixture.entity(
+                        id = "log-xyz",
+                        timestamp = "2026-08-16T17:11:00Z",
+                        severity = "INFO",
+                        tag = "network",
+                        message = "other",
+                        latencyMs = 20,
+                        isAiGenerated = false,
+                    ),
+                    LogsTestFixture.entity(
+                        id = "log-abc",
+                        timestamp = "2026-08-16T17:12:00Z",
+                        severity = "ERROR",
+                        tag = "db",
+                        message = "second",
+                        latencyMs = 30,
+                        isAiGenerated = false,
+                    ),
+                )
 
-            runCatching { dao.replaceSnapshot(duplicated) }
+            dao.replaceSnapshot(duplicated)
 
-            // Without the transaction the table would now be empty or half written.
-            assertThat(dao.count()).isEqualTo(SNAPSHOT.size)
-            assertThat(dao.matchingIds(LogQuery()))
-                .isEqualTo(listOf("log-6", "log-5", "log-4", "log-3", "log-2", "log-1"))
+            // The duplicate collapses to one row, and the later write wins.
+            assertThat(dao.count()).isEqualTo(2)
+            assertThat(dao.logById("log-abc")?.message).isEqualTo("second")
+            // The unrelated id is saved normally, unaffected by the collision.
+            assertThat(dao.logById("log-xyz")?.message).isEqualTo("other")
         }
 
     @Test

@@ -3,6 +3,7 @@ package com.example.fgfchallenge.feature.logs.data.local
 import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RawQuery
 import androidx.room.RoomRawQuery
@@ -81,7 +82,11 @@ internal interface LogsDao {
     @Query("DELETE FROM ${LogEntity.TABLE_NAME}")
     suspend fun deleteAll()
 
-    @Insert
+    /**
+     * A duplicate [LogEntity.id] within the same snapshot is not treated as corrupt input: the
+     * later row in insertion order replaces the earlier one rather than failing the transaction.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(entities: List<LogEntity>)
 
     companion object {

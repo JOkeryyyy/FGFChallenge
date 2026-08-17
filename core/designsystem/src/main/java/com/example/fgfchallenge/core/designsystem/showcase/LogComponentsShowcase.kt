@@ -18,6 +18,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.example.fgfchallenge.core.designsystem.component.ErrorDialog
 import com.example.fgfchallenge.core.designsystem.component.LoadingContent
 import com.example.fgfchallenge.core.designsystem.component.LogDetailsSheet
+import com.example.fgfchallenge.core.designsystem.component.LogFilterSheet
 import com.example.fgfchallenge.core.designsystem.component.LogMinuteHeader
 import com.example.fgfchallenge.core.designsystem.component.LogRow
 import com.example.fgfchallenge.core.designsystem.component.LogSearchField
@@ -25,7 +26,12 @@ import com.example.fgfchallenge.core.designsystem.component.NoResultsContent
 import com.example.fgfchallenge.core.designsystem.component.SeverityBadge
 import com.example.fgfchallenge.core.designsystem.component.SeverityIndicator
 import com.example.fgfchallenge.core.designsystem.component.TagBadge
+import com.example.fgfchallenge.core.designsystem.model.AiGeneratedChoice
 import com.example.fgfchallenge.core.designsystem.model.LogDetailsUi
+import com.example.fgfchallenge.core.designsystem.model.LogFilterDateTimeUi
+import com.example.fgfchallenge.core.designsystem.model.LogFilterLatencyUi
+import com.example.fgfchallenge.core.designsystem.model.LogFilterOptionUi
+import com.example.fgfchallenge.core.designsystem.model.LogFilterSheetUi
 import com.example.fgfchallenge.core.designsystem.model.SeverityBadgeTone
 import com.example.fgfchallenge.core.designsystem.model.SeverityDensityUi
 import com.example.fgfchallenge.core.designsystem.model.SeverityLegendItem
@@ -64,6 +70,30 @@ private val ShowcaseDensity =
                 SeverityLegendItem("WARN", 1_143, SeverityBadgeTone.Warn),
                 SeverityLegendItem("INFO", 1_207, SeverityBadgeTone.Info),
                 SeverityLegendItem("DEBUG", 600, SeverityBadgeTone.Debug),
+            ),
+    )
+
+/** A partly composed draft, so the catalog shows both selected and unselected chip states. */
+private val ShowcaseFilters =
+    LogFilterSheetUi(
+        tags =
+            listOf("network", "auth", "cache").map { tag ->
+                LogFilterOptionUi(id = tag, label = tag, selected = tag == "network")
+            },
+        severities =
+            listOf("DEBUG", "INFO", "WARN", "ERROR", "FATAL").map { severity ->
+                LogFilterOptionUi(id = severity, label = severity, selected = severity == "ERROR")
+            },
+        aiGenerated = AiGeneratedChoice.Any,
+        start = LogFilterDateTimeUi(),
+        end = LogFilterDateTimeUi(),
+        latency =
+            LogFilterLatencyUi(
+                bounds = 0f..10_000f,
+                selection = 0f..10_000f,
+                lowerBoundLabel = "0",
+                upperBoundLabel = "10,000",
+                selectionLabel = "0 – 10,000 ms",
             ),
     )
 
@@ -160,6 +190,10 @@ fun LogComponentsShowcase(modifier: Modifier = Modifier) {
 
             ShowcaseSection(title = "Log details sheet") {
                 LogDetailsSheet(details = ShowcaseDetails, onDismissRequest = {})
+            }
+
+            ShowcaseSection(title = "Filter sheet") {
+                LogFilterSheet(filters = ShowcaseFilters, onEvent = {}, onDismissRequest = {})
             }
         }
     }
