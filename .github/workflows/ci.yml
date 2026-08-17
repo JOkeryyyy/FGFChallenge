@@ -35,6 +35,7 @@ jobs:
             lintDebug \
             testDebugUnitTest \
             :core:designsystem:verifyPaparazziDebug \
+            :feature:logs:verifyPaparazziDebug \
             :app:assembleDebug \
             :app:compileDebugAndroidTestSources \
             :core:designsystem:compileDebugAndroidTestSources \
