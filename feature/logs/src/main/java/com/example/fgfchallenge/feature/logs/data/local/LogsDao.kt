@@ -65,11 +65,17 @@ internal interface LogsDao {
      *
      * Observers see the complete previous snapshot or the complete new one — never the emptied
      * table in between — and any failure during insertion rolls the deletion back with it.
+     *
+     * Insertion is batched so a full import does not bind one statement per row in a single call,
+     * but every batch stays inside the same transaction: batching bounds the work, it does not
+     * make the replacement observable in pieces.
      */
     @Transaction
     suspend fun replaceSnapshot(entities: List<LogEntity>) {
         deleteAll()
-        insertAll(entities)
+        for (batch in entities.chunked(INSERT_BATCH_SIZE)) {
+            insertAll(batch)
+        }
     }
 
     @Query("DELETE FROM ${LogEntity.TABLE_NAME}")
@@ -77,4 +83,9 @@ internal interface LogsDao {
 
     @Insert
     suspend fun insertAll(entities: List<LogEntity>)
+
+    companion object {
+        /** Rows per insert statement during a replacement. Bounded, not tuned. */
+        private const val INSERT_BATCH_SIZE = 500
+    }
 }

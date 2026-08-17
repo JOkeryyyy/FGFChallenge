@@ -85,9 +85,9 @@ The user-facing end minute is inclusive and becomes the next minute as an exclus
 - Open structured, read-only log details by stable log ID. Support close, swipe-down, and Back dismissal even when the selected row came from a later page.
 - Keep the screen readable and responsive.
 
-## Performance boundary
+## Optional performance test
 
-The approximately 100,000-record architecture target must not cause the app to materialize all stored rows or all matching rows in `LogViewerUiState`. Database work, mapping, and imports remain main-safe. No generated performance fixture, device benchmark, optimization exercise, or recorded timing evidence is required for delivery; investigate performance only if the supplied fixture reveals a visible problem.
+The approximately 100,000-record architecture target must not cause the app to materialize all stored rows or all matching rows in `LogViewerUiState`. Database work, mapping, and imports remain main-safe. After core functionality is complete, a performance smoke test against the supplied fixture may be run if time permits. Its execution, measurements, and any follow-up optimization are optional and are not acceptance or delivery conditions.
 
 ## Scope boundaries
 
@@ -107,6 +107,7 @@ Room persistence, database-backed filtering, and Paging 3 are required by this r
 
 - Keep focused unit or data tests for supported query behavior, snapshot replacement, retry, and ViewModel state. Full combinatorial coverage is not required.
 - Add one representative screenshot test per screen to demonstrate the visual-test approach. The existing instrumented coverage is sufficient; no additional interaction-test work is required.
+- A performance smoke test is optional; it may inform later work but does not block acceptance.
 - Include readable code, focused comments for non-obvious constraints, setup instructions, an app screen recording, and brief architecture notes in `README.md`.
 - Record material AI assistance in `PROMPTS.md`.
 - Deliver the project through GitHub.

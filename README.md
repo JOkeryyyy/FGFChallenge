@@ -81,8 +81,9 @@ Core modules never depend on app or feature modules.
 ## Prototype scope note
 
 The remaining Room/Paging work keeps the core log-viewer flow and basic
-retryable failure handling. It does not require a standalone domain layer or
-100k benchmark evidence. One representative screenshot test per screen
-demonstrates the visual-test approach; the existing instrumented coverage is
-retained without new interaction-test work. A screen recording remains a
-delivery artifact.
+retryable failure handling. It does not require a standalone domain layer.
+A performance smoke test may be run after the core flow works, but it and any
+100k benchmark evidence are optional rather than delivery requirements. One
+representative screenshot test per screen demonstrates the visual-test
+approach; the existing instrumented coverage is retained without new
+interaction-test work. A screen recording remains a delivery artifact.
