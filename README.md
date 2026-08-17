@@ -78,8 +78,11 @@ Core modules never depend on app or feature modules.
 | `:core:network` | Retrofit/OkHttp/Kotlinx Serialization networking infrastructure. |
 | `:core:designsystem` | Shared Compose Material 3 theme (`FGFChallengeTheme`) and design-system building blocks. |
 
-## Foundation scope note
+## Prototype scope note
 
-Screenshots/recording, performance findings, and complete test evidence are
-release-milestone deliverables and are not claimed by this foundation
-milestone.
+The remaining Room/Paging work keeps the core log-viewer flow and basic
+retryable failure handling. It does not require a standalone domain layer or
+100k benchmark evidence. One representative screenshot test per screen
+demonstrates the visual-test approach; the existing instrumented coverage is
+retained without new interaction-test work. A screen recording remains a
+delivery artifact.

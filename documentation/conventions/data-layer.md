@@ -12,9 +12,10 @@ illustrative example below (module/package layout, a specific class name, whethe
 project specifically:
 
 - The approved data package layout is `data/remote`, `data/local`, `data/model`,
-  `data/mapper`, `data/repository`, `data/error`, `data/di`, with one focused
-  `domain/query` policy above it (see `ARCHITECTURE.md` → *Gradle modules*). The flat
-  `data/LogsRepository.kt` layouts below remain illustrative rather than literal.
+  `data/mapper`, `data/repository`, `data/error`, and `data/di` (see
+  `ARCHITECTURE.md` → *Gradle modules*). This one-screen prototype does not require a
+  `domain/query` package. The flat `data/LogsRepository.kt` layouts below remain
+  illustrative rather than literal.
 - Step 5's `NetworkLogsRepository` is a transitional remote-only baseline. Step 8
   replaces it with `SnapshotLogsRepository`, named for its complete-remote-snapshot to
   Room strategy, rather than the generic `DefaultLogsRepository` used in examples.
@@ -23,9 +24,9 @@ project specifically:
   multiple implementations or meaningful test/lifecycle isolation justify it, not
   merely because two infrastructure sources now exist.
 - Room is the post-refresh source of truth, and Paging 3 carries the bounded row working
-  set. The immutable `LogQuery` repository input remains in `data/model`; the focused
-  domain policy owns its normalization and coordinates page/aggregate streams without
-  moving the repository contract into domain.
+  set. The immutable `LogQuery` repository input remains in `data/model`; the ViewModel
+  derives it and coordinates page/aggregate streams without moving the repository
+  contract into another layer.
 - Hilt is the project's DI framework (see §12); the framework-agnostic examples below
   apply equally to Hilt constructor injection.
 - Use this project's existing typed `Result<T, E : Error>` / `EmptyResult` wrapper and
@@ -536,8 +537,8 @@ behavior, and they invite `when` branches that all do the same thing.
 
 In this project, `LogsDataError` is a single value: a failed load produces the same
 retryable error state whatever caused it. Connectivity loss, timeout, a non-2xx response,
-undecodable JSON, and a semantically invalid payload therefore collapse into one failure.
-Classify further only when a caller can act on the difference.
+undecodable JSON, and a mapping failure therefore collapse into one failure. Classify
+further only when a caller can act on the difference.
 
 ### Preserve Coroutine Cancellation
 
@@ -746,10 +747,9 @@ The Repository interface remains in `data`.
 
 > This project's approved `feature/logs` layout is documented in `ARCHITECTURE.md` →
 > *Gradle modules* (`data/remote`, `data/local`, `data/model`, `data/mapper`,
-> `data/repository`, `data/error`, `data/di`, plus focused `domain/query`). Treat the
-> layouts above as generic illustrations of the dependency direction and the
-> "Repository interface lives in `data`" rule, not as a literal restructuring of this
-> project.
+> `data/repository`, `data/error`, `data/di`). Treat the layouts above as generic
+> illustrations of the dependency direction and the "Repository interface lives in
+> `data`" rule, not as a literal restructuring of this project.
 
 ## 16. Testing Boundaries
 

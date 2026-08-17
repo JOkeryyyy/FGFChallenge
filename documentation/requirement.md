@@ -11,7 +11,7 @@ The supplied 5,000-record endpoint remains the schema and development fixture. I
 Build a responsive Jetpack Compose log viewer that:
 
 - fetches one complete structured log snapshot on every app launch;
-- validates the complete response and atomically replaces a feature-owned Room snapshot;
+- decodes and maps the response, then atomically replaces a feature-owned Room snapshot;
 - queries Room for all search, filtering, ordering, aggregates, details, and list data;
 - initially displays the newest 100 matching logs and progressively loads later pages of 100;
 - keeps the complete matching collection out of presentation state;
@@ -22,8 +22,8 @@ Build a responsive Jetpack Compose log viewer that:
 - Use a multi-module or clearly package-separated MVVM/MVI architecture with unidirectional data flow.
 - Use Retrofit/OkHttp for the one-shot remote request, Hilt or Koin for dependency injection, Kotlin Coroutines/Flow for asynchronous work, Room as the local source of truth, and Paging 3 for list delivery.
 - Attempt exactly one complete remote refresh when the app launches. An explicit Retry action may start another attempt after failure.
-- Decode, validate, and map the complete response before mutating Room. Validation must reject an incomplete or internally inconsistent snapshot.
-- Replace the prior Room snapshot in one transaction. Network, validation, cancellation, or database failure must leave the prior complete snapshot intact and present a retryable launch failure; retained data must not be silently reported as current.
+- Decode and map the complete response before mutating Room.
+- Replace the prior Room snapshot in one transaction. Network, decoding/mapping, cancellation, or database failure must leave the prior complete snapshot intact and present a retryable launch failure; retained data must not be silently reported as current.
 - After a successful refresh, Room is the only source for rows, result counts, severity counts, filter options, details lookup, and the severity indicator.
 - Remote pagination, incremental synchronization, and streaming are not introduced.
 
@@ -83,11 +83,11 @@ The user-facing end minute is inclusive and becomes the next minute as an exclus
 - Show no results only after the current query completes with a full-result count of zero.
 - Build a custom Compose Canvas severity indicator for ERROR + FATAL density and pair color with text labels.
 - Open structured, read-only log details by stable log ID. Support close, swipe-down, and Back dismissal even when the selected row came from a later page.
-- Keep light/dark rendering deterministic, polished, responsive, and accessible.
+- Keep the screen readable and responsive.
 
-## Performance requirement
+## Performance boundary
 
-The approximately 100,000-record snapshot must be refreshable, queryable, and scrollable without materializing all stored rows or all matching rows in `LogViewerUiState`. Database work, mapping, and imports must remain main-safe. Performance claims must be supported by measurements on a documented device or emulator.
+The approximately 100,000-record architecture target must not cause the app to materialize all stored rows or all matching rows in `LogViewerUiState`. Database work, mapping, and imports remain main-safe. No generated performance fixture, device benchmark, optimization exercise, or recorded timing evidence is required for delivery; investigate performance only if the supplied fixture reveals a visible problem.
 
 ## Scope boundaries
 
@@ -101,13 +101,13 @@ The following remain out of scope:
 - analytics and production observability infrastructure;
 - editing, sharing, or raw-JSON tooling in log details.
 
-Room persistence, database-backed filtering, Paging 3, and one focused domain query-policy boundary are required by this revision and are not non-goals.
+Room persistence, database-backed filtering, and Paging 3 are required by this revision and are not non-goals. A separate domain layer is optional and must not be added solely to satisfy this document.
 
 ## Testing and delivery
 
-- Write robust unit and integration tests for query semantics, database integrity, repository coordination, query policy, Paging, and ViewModel state.
-- Add visual and targeted Compose interaction tests for the required screen and load states.
-- Include readable code, focused comments for non-obvious constraints, setup instructions, an app screen recording, and architecture/performance notes in `README.md`.
+- Keep focused unit or data tests for supported query behavior, snapshot replacement, retry, and ViewModel state. Full combinatorial coverage is not required.
+- Add one representative screenshot test per screen to demonstrate the visual-test approach. The existing instrumented coverage is sufficient; no additional interaction-test work is required.
+- Include readable code, focused comments for non-obvious constraints, setup instructions, an app screen recording, and brief architecture notes in `README.md`.
 - Record material AI assistance in `PROMPTS.md`.
 - Deliver the project through GitHub.
 
