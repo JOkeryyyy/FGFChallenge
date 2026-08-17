@@ -8,8 +8,8 @@ import kotlinx.serialization.Serializable
  * case names, timestamps and severities still as strings — and never leave the data layer.
  *
  * Every property is required. A key that is absent or null is a structural mismatch and fails
- * decoding as `LogsDataError.Serialization`; values that decode but are semantically invalid are
- * rejected by `LogBatchMapper` as `LogsDataError.Schema`.
+ * decoding; values that decode but are semantically invalid are rejected by `LogBatchMapper`.
+ * Both reach the caller as the same `LogsDataError`.
  */
 @Serializable
 internal data class LogsPayloadDto(

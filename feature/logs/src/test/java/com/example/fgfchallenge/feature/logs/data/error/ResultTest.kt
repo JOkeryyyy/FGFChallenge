@@ -8,7 +8,7 @@ import org.junit.Test
 /** Covers the feature's typed-result helpers: they must transform data and pass failures through. */
 class ResultTest {
     private val success: Result<Int, LogsDataError> = Result.Success(2)
-    private val failure: Result<Int, LogsDataError> = Result.Error(LogsDataError.Timeout)
+    private val failure: Result<Int, LogsDataError> = Result.Error(LogsDataError)
 
     @Test
     fun `map transforms success data`() {
@@ -17,7 +17,7 @@ class ResultTest {
 
     @Test
     fun `map leaves a failure untouched`() {
-        assertThat(failure.map { it * 3 }).isEqualTo(Result.Error(LogsDataError.Timeout))
+        assertThat(failure.map { it * 3 }).isEqualTo(Result.Error(LogsDataError))
     }
 
     @Test
@@ -35,7 +35,7 @@ class ResultTest {
     fun `onFailure runs only for failure`() {
         var seen: LogsDataError? = null
         failure.onFailure { seen = it }
-        assertThat(seen).isEqualTo(LogsDataError.Timeout)
+        assertThat(seen).isEqualTo(LogsDataError)
 
         var unseen: LogsDataError? = null
         success.onFailure { unseen = it }
@@ -45,6 +45,6 @@ class ResultTest {
     @Test
     fun `asEmptyResult discards data but keeps the outcome`() {
         assertThat(success.asEmptyResult()).isEqualTo(Result.Success(Unit))
-        assertThat(failure.asEmptyResult()).isEqualTo(Result.Error(LogsDataError.Timeout))
+        assertThat(failure.asEmptyResult()).isEqualTo(Result.Error(LogsDataError))
     }
 }

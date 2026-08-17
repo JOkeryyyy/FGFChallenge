@@ -22,9 +22,14 @@ project specifically:
   planned second source.
 - Hilt is the project's DI framework (see §12); the framework-agnostic examples below
   apply equally to Hilt constructor injection.
-- Use this project's existing typed `Result<T, DataError>` / `EmptyResult` wrapper and
+- Use this project's existing typed `Result<T, E : Error>` / `EmptyResult` wrapper and
   its `map`/`onSuccess`/`onFailure` helpers rather than redefining a parallel `Result`
-  type — see §11.
+  type — see §11. It lives in `:feature:logs`, not `:core:network`.
+- The feature's repository failure is a single `LogsDataError` value, not the multi-case
+  hierarchy the illustrative example in §11 shows — see *Match error granularity to
+  behavior* in that section.
+- Data-layer Hilt bindings for a feature live in one module (`LogsDataModule`), not one
+  module per binding — see §12.
 
 ## 1. Architectural Baseline
 
@@ -505,10 +510,27 @@ Result<T, DataError>
 ```
 
 This is a project convention rather than a requirement of Android Architecture Guidance.
-In this project, reuse the existing `Result<T, DataError>` / `EmptyResult` wrapper and its
+In this project, reuse the existing `Result<T, E : Error>` / `EmptyResult` wrapper and its
 `map`/`onSuccess`/`onFailure` helpers instead of introducing a second, parallel `Result`
 type — one typed-result convention per codebase avoids ambiguity between it and
 `kotlin.Result` from the standard library.
+
+The wrapper stays in `:feature:logs`. It is a result convention, not network
+infrastructure, so it does not belong in `:core:network`; promote it to a neutral shared
+module only when a second feature genuinely reuses it.
+
+### Match Error Granularity to Behavior
+
+The hierarchy above illustrates the shape of a typed error, not a target to reproduce.
+Split a failure into separate cases only where a consumer behaves differently for each —
+different retry policy, different user-facing copy, different recovery path. Cases that
+every caller handles identically add naming, mapping, and test surface while changing no
+behavior, and they invite `when` branches that all do the same thing.
+
+In this project, `LogsDataError` is a single value: a failed load produces the same
+retryable error state whatever caused it. Connectivity loss, timeout, a non-2xx response,
+undecodable JSON, and a semantically invalid payload therefore collapse into one failure.
+Classify further only when a caller can act on the difference.
 
 ### Preserve Coroutine Cancellation
 
@@ -571,6 +593,19 @@ Architecture rules should not unnecessarily depend on a particular DI library. T
 project uses Hilt (see `ARCHITECTURE.md` → *Dependency injection*); apply the constructor
 injection shown above via `@Inject constructor` and provide bindings/modules under each
 feature's `data/di` package.
+
+### One Module Per Owner, Not Per Binding
+
+Group a feature's data-layer bindings into a single module — in this project,
+`LogsDataModule` holds the endpoint API, the repository binding, and the mapping
+dispatcher. Splitting them across a module per binding adds files, imports, and headers
+without introducing a boundary: they share one component, one lifetime, and one owner.
+
+Add a second module when something real separates it — a different component or scope, a
+binding another module must be able to replace in tests, or an owner outside the feature.
+
+Since `@Binds` methods must be abstract and `@Provides` methods must not be, one module
+holding both is an abstract class whose `@Provides` bindings live in its companion object.
 
 ## 13. Source of Truth
 
@@ -755,7 +790,9 @@ Before adding or modifying a data feature:
 * One-shot operations use `suspend`; observable changing data uses `Flow`.
 * Data and Domain APIs are main-safe.
 * Coroutine cancellation is never converted into a normal application error.
+* Error cases exist only where a consumer behaves differently for each of them.
 * Data-source or framework exceptions do not accidentally leak into the UI.
+* DI modules are grouped by owner and lifetime rather than one module per binding.
 * Implementations use meaningful names rather than generic `Impl` suffixes.
 
 ## Core Rule

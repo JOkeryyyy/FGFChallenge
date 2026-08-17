@@ -16,17 +16,17 @@ import java.util.Locale
  * Turns a decoded [LogsPayloadDto] into the immutable [LogBatch] the repository exposes, and
  * rejects payloads whose values decode but violate the documented semantics.
  *
- * The split is deliberate: structural problems (missing or null keys) already fail during
- * decoding as `LogsDataError.Serialization`, so everything here is a semantic check reported as
- * [LogsDataError.Schema]. A partially valid payload is never returned — an invalid entry fails
- * the whole load rather than silently dropping rows the user would never know were missing.
+ * Structural problems (missing or null keys) already fail earlier, during decoding, so every
+ * check here is semantic. Both outcomes are the same [LogsDataError]. A partially valid payload
+ * is never returned — an invalid entry fails the whole load rather than silently dropping rows
+ * the user would never know were missing.
  */
 internal fun LogsPayloadDto.toLogBatch(): Result<LogBatch, LogsDataError> {
-    if (totalCount < 0 || sessionId.isBlank()) return Result.Error(LogsDataError.Schema)
+    if (totalCount < 0 || sessionId.isBlank()) return Result.Error(LogsDataError)
 
     val mapped = ArrayList<LogEntry>(entries.size)
     for (dto in entries) {
-        mapped += dto.toLogEntryOrNull() ?: return Result.Error(LogsDataError.Schema)
+        mapped += dto.toLogEntryOrNull() ?: return Result.Error(LogsDataError)
     }
 
     // A reported/actual count mismatch is not a failure: consumers count `entries`, and the

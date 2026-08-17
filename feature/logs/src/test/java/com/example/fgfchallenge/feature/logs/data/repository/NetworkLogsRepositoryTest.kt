@@ -30,10 +30,11 @@ import kotlin.coroutines.CoroutineContext
 
 /**
  * Exercises the real Retrofit + Kotlinx Serialization + repository path against MockWebServer:
- * the request that is issued, payload mapping, and the typed failures that responses produce.
+ * the request that is issued, payload mapping, and which responses are rejected.
  *
- * Failures that can only be triggered by the transport itself (connectivity, timeout,
- * cancellation) are covered by [NetworkLogsRepositoryFailureTest] with a fake `LogsApi`.
+ * Every rejection produces the same [LogsDataError], so each failing case is here to pin down the
+ * response the repository refuses, not the value it returns. Failures that only the transport can
+ * raise are covered by [NetworkLogsRepositoryFailureTest] with a fake `LogsApi`.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class NetworkLogsRepositoryTest {
@@ -119,104 +120,76 @@ class NetworkLogsRepositoryTest {
         }
 
     @Test
-    fun `getLogs preserves the status code of a client error`() =
+    fun `getLogs fails on an unsuccessful response`() =
         runTest {
             server.enqueue(MockResponse(code = 404, body = "not found"))
 
-            val result = repository().getLogs()
-
-            assertThat(result).isEqualTo(Result.Error(LogsDataError.Http(404)))
+            assertThat(repository().getLogs()).isEqualTo(FAILURE)
         }
 
     @Test
-    fun `getLogs preserves the status code of a server error`() =
-        runTest {
-            server.enqueue(MockResponse(code = 503, body = ""))
-
-            val result = repository().getLogs()
-
-            assertThat(result).isEqualTo(Result.Error(LogsDataError.Http(503)))
-        }
-
-    @Test
-    fun `getLogs returns Schema when a successful response has no body`() =
+    fun `getLogs fails when a successful response has no body`() =
         runTest {
             // Retrofit reports 204/205 as a successful response with a null body.
             server.enqueue(MockResponse(code = 204, body = ""))
 
-            val result = repository().getLogs()
-
-            assertThat(result).isEqualTo(Result.Error(LogsDataError.Schema))
+            assertThat(repository().getLogs()).isEqualTo(FAILURE)
         }
 
     @Test
-    fun `getLogs returns Serialization for malformed json`() =
+    fun `getLogs fails on malformed json`() =
         runTest {
             server.enqueue(MockResponse(code = 200, body = "{ \"total_count\": "))
 
-            val result = repository().getLogs()
-
-            assertThat(result).isEqualTo(Result.Error(LogsDataError.Serialization))
+            assertThat(repository().getLogs()).isEqualTo(FAILURE)
         }
 
     @Test
-    fun `getLogs returns Serialization when a required key is absent`() =
+    fun `getLogs fails when a required key is absent`() =
         runTest {
             server.enqueue(MockResponse(code = 200, body = VALID_PAYLOAD.replace("\"tag\": \"network\",", "")))
 
-            val result = repository().getLogs()
-
-            assertThat(result).isEqualTo(Result.Error(LogsDataError.Serialization))
+            assertThat(repository().getLogs()).isEqualTo(FAILURE)
         }
 
     @Test
-    fun `getLogs returns Schema for an invalid timestamp`() =
+    fun `getLogs fails on an invalid timestamp`() =
         runTest {
             server.enqueue(MockResponse(code = 200, body = VALID_PAYLOAD.replace("2026-08-16T17:10:05Z", "17:10:05")))
 
-            val result = repository().getLogs()
-
-            assertThat(result).isEqualTo(Result.Error(LogsDataError.Schema))
+            assertThat(repository().getLogs()).isEqualTo(FAILURE)
         }
 
     @Test
-    fun `getLogs returns Schema for a blank required value`() =
+    fun `getLogs fails on a blank required value`() =
         runTest {
             server.enqueue(MockResponse(code = 200, body = VALID_PAYLOAD.replace("\"network\"", "\"   \"")))
 
-            val result = repository().getLogs()
-
-            assertThat(result).isEqualTo(Result.Error(LogsDataError.Schema))
+            assertThat(repository().getLogs()).isEqualTo(FAILURE)
         }
 
     @Test
-    fun `getLogs returns Schema for a blank session id`() =
+    fun `getLogs fails on a blank session id`() =
         runTest {
             server.enqueue(MockResponse(code = 200, body = VALID_PAYLOAD.replace("\"session-666\"", "\"\"")))
 
-            val result = repository().getLogs()
-
-            assertThat(result).isEqualTo(Result.Error(LogsDataError.Schema))
+            assertThat(repository().getLogs()).isEqualTo(FAILURE)
         }
 
     @Test
-    fun `getLogs returns Schema for a negative latency`() =
+    fun `getLogs fails on a negative latency`() =
         runTest {
             server.enqueue(MockResponse(code = 200, body = VALID_PAYLOAD.replace("\"latency_ms\": 2040", "\"latency_ms\": -1")))
 
-            val result = repository().getLogs()
-
-            assertThat(result).isEqualTo(Result.Error(LogsDataError.Schema))
+            assertThat(repository().getLogs()).isEqualTo(FAILURE)
         }
 
     @Test
-    fun `getLogs returns Schema for a negative total count`() =
+    fun `getLogs fails on a negative total count`() =
         runTest {
             server.enqueue(MockResponse(code = 200, body = VALID_PAYLOAD.replace("\"total_count\": 2", "\"total_count\": -1")))
 
-            val result = repository().getLogs()
-
-            assertThat(result).isEqualTo(Result.Error(LogsDataError.Schema))
+            assertThat(repository().getLogs()).isEqualTo(FAILURE)
         }
 
     @Test
@@ -250,6 +223,8 @@ private class CountingDispatcher : CoroutineDispatcher() {
 
 /** Mirrors the `:core:network` configuration so the tests exercise the same decoding behavior. */
 private val JSON = Json { ignoreUnknownKeys = true }
+
+private val FAILURE = Result.Error(LogsDataError)
 
 private val EXPECTED_BATCH =
     LogBatch(

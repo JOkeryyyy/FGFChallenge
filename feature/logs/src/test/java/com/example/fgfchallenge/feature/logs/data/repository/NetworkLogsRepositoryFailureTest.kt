@@ -15,37 +15,30 @@ import kotlinx.serialization.SerializationException
 import org.junit.Test
 import retrofit2.Response
 import java.io.IOException
-import java.net.ConnectException
-import java.net.NoRouteToHostException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
 /**
- * Classification of transport failures that MockWebServer cannot raise deterministically. Each
- * case drives the repository with a fake [LogsApi] that throws one specific exception.
+ * Transport failures that MockWebServer cannot raise deterministically. Each case drives the
+ * repository with a fake [LogsApi] that throws one specific exception, and asserts that it stops
+ * at the data boundary — except cancellation, which must not.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class NetworkLogsRepositoryFailureTest {
     @Test
-    fun `unresolved host is connectivity`() = assertClassified(UnknownHostException("no dns"), LogsDataError.Connectivity)
+    fun `unresolved host is a data failure`() = assertContained(UnknownHostException("no dns"))
 
     @Test
-    fun `refused connection is connectivity`() = assertClassified(ConnectException("refused"), LogsDataError.Connectivity)
+    fun `socket timeout is a data failure`() = assertContained(SocketTimeoutException("timeout"))
 
     @Test
-    fun `unroutable host is connectivity`() = assertClassified(NoRouteToHostException("no route"), LogsDataError.Connectivity)
+    fun `unexpected io failure is a data failure`() = assertContained(IOException("broken pipe"))
 
     @Test
-    fun `socket timeout is timeout`() = assertClassified(SocketTimeoutException("timeout"), LogsDataError.Timeout)
+    fun `undecodable payload is a data failure`() = assertContained(SerializationException("bad json"))
 
     @Test
-    fun `undecodable payload is serialization`() = assertClassified(SerializationException("bad json"), LogsDataError.Serialization)
-
-    @Test
-    fun `unexpected io failure is unknown`() = assertClassified(IOException("broken pipe"), LogsDataError.Unknown)
-
-    @Test
-    fun `unexpected runtime failure is unknown`() = assertClassified(IllegalStateException("boom"), LogsDataError.Unknown)
+    fun `unexpected runtime failure is a data failure`() = assertContained(IllegalStateException("boom"))
 
     @Test
     fun `cancellation is rethrown unchanged`() =
@@ -66,14 +59,12 @@ class NetworkLogsRepositoryFailureTest {
             assertThat(thrown).isSameInstanceAs(cancellation)
         }
 
-    private fun assertClassified(
-        failure: Throwable,
-        expected: LogsDataError,
-    ) = runTest {
-        val repository = NetworkLogsRepository(ThrowingLogsApi(failure), UnconfinedTestDispatcher())
+    private fun assertContained(failure: Throwable) =
+        runTest {
+            val repository = NetworkLogsRepository(ThrowingLogsApi(failure), UnconfinedTestDispatcher())
 
-        assertThat(repository.getLogs()).isEqualTo(Result.Error(expected))
-    }
+            assertThat(repository.getLogs()).isEqualTo(Result.Error(LogsDataError))
+        }
 }
 
 private class ThrowingLogsApi(

@@ -150,8 +150,8 @@ feature/logs/
         model/          Repository-facing application data models
         mapper/         DTO validation and mapping
         repository/     LogsRepository and NetworkLogsRepository
-        error/          Typed repository failures
-        di/             Feature Hilt providers and bindings
+        error/          The feature-local typed result and its repository failure
+        di/             One feature Hilt module holding the data-layer bindings
 
     presentation/
         model/          Formatted UI models and flat lazy-list items
@@ -201,7 +201,7 @@ Data owns all external-data access and the repository abstraction:
 - `LogsRepository` and `NetworkLogsRepository`;
 - repository-facing application data models;
 - DTO validation and mapping;
-- typed classification of expected network, HTTP, serialization, and schema failures;
+- conversion of expected network, HTTP, serialization, and schema failures into the repository's typed failure;
 - feature Hilt wiring.
 
 Remote DTOs remain internal to data. Unknown JSON keys are ignored. Missing required fields, malformed payloads, or invalid timestamps fail the load rather than producing partially invalid entries.
@@ -240,17 +240,13 @@ DTO timestamps and severity values remain strings until mapping. Mapping parses 
 
 ## Error handling
 
-Expected failures are converted at the data boundary into feature-local typed failures. The categories cover:
+Expected failures are converted at the data boundary into one feature-local typed failure. Unavailable connectivity, timeout, an unsuccessful HTTP response, invalid or incompatible response data, and otherwise unclassified data-access failures all collapse into that single value.
 
-- unavailable connectivity;
-- timeout;
-- unsuccessful HTTP response, retaining the status code when useful;
-- invalid or incompatible response data;
-- an otherwise unclassified data-access failure.
+The failure is deliberately not a classified hierarchy. The application's answer to a failed load is the same retryable error presentation whatever caused it, so a finer taxonomy would encode a distinction no caller acts on. A case is split out only when a consumer genuinely behaves differently for it — for example, if retry policy or user-facing copy ever has to diverge by cause.
 
-Coroutine cancellation is always rethrown and is never converted into a load failure. Presentation receives the stable typed repository failure contract without seeing transport exceptions and maps failures to localized error content and retry behavior. A future use case may translate the failure only when it adds meaningful policy.
+Coroutine cancellation is always rethrown and is never converted into a load failure. Presentation receives the stable typed repository failure without seeing transport exceptions and maps it to localized error content and retry behavior. A future use case may translate the failure only when it adds meaningful policy.
 
-The initial UI may use one concise retryable error presentation even though tests verify the underlying classifications.
+The typed result wrapper carrying that failure stays inside `:feature:logs`. It is a result convention rather than network infrastructure, so it does not belong in `:core:network`; it moves to a neutral shared module only if a second feature genuinely needs it.
 
 ## Processing policy
 
@@ -336,7 +332,7 @@ Display formatting occurs in presentation before composition. Compose receives U
 Hilt is the application DI framework.
 
 - `:app` provides the Hilt application and activity entry points.
-- `:feature:logs` provides the endpoint API, repository, processing helpers, optional future use cases, and dispatchers.
+- `:feature:logs` provides the endpoint API, repository, processing helpers, optional future use cases, and dispatchers. Its data-layer bindings live in one module rather than one module per binding; modules are split only when they separate real lifetimes or ownership.
 - Constructor injection is preferred.
 - Mutable or expensive dependencies are scoped only when their lifecycle requires it.
 - `:core:network` remains unaware of feature types.

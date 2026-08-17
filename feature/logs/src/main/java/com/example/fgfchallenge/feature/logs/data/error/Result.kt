@@ -7,6 +7,10 @@ package com.example.fgfchallenge.feature.logs.data.error
  * This deliberately shadows `kotlin.Result`, which cannot express a typed failure. Every layer in
  * this feature uses this type rather than throwing for expected failures; see
  * `documentation/conventions/data-layer.md` §11.
+ *
+ * It stays in `:feature:logs` rather than moving to `:core:network`: a result convention is not
+ * network infrastructure. It moves to a neutral shared module only if a second feature genuinely
+ * needs it.
  */
 internal interface Error
 

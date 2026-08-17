@@ -9,12 +9,7 @@ import com.example.fgfchallenge.feature.logs.data.remote.LogsApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.SerializationException
 import java.io.IOException
-import java.net.ConnectException
-import java.net.NoRouteToHostException
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
 import javax.inject.Inject
 
 /**
@@ -25,9 +20,9 @@ import javax.inject.Inject
  * `LogsRemoteDataSource` would add a layer without adding a boundary
  * (`documentation/conventions/data-layer.md` §6).
  *
- * This class is where transport failures stop. Everything it can throw is classified into
- * [LogsDataError], except coroutine cancellation, which is always rethrown untouched so
- * structured concurrency keeps working.
+ * This class is where transport failures stop. Everything it can throw becomes [LogsDataError],
+ * except coroutine cancellation, which is always rethrown untouched so structured concurrency
+ * keeps working.
  */
 internal class NetworkLogsRepository
     @Inject
@@ -38,39 +33,26 @@ internal class NetworkLogsRepository
         override suspend fun getLogs(): Result<LogBatch, LogsDataError> =
             try {
                 val response = logsApi.getLogs()
-                when {
-                    !response.isSuccessful -> {
-                        Result.Error(LogsDataError.Http(response.code()))
-                    }
-
-                    else -> {
-                        when (val body = response.body()) {
-                            // A 2xx with no body is well-formed HTTP but an unusable payload.
-                            null -> Result.Error(LogsDataError.Schema)
-
-                            // Validating and mapping ~5,000 entries is CPU work, so it moves off
-                            // the caller's thread. The Retrofit call itself already suspends.
-                            else -> withContext(defaultDispatcher) { body.toLogBatch() }
-                        }
-                    }
+                val body = response.body()
+                if (!response.isSuccessful || body == null) {
+                    // A non-2xx status, or a 2xx with no body: well-formed HTTP, unusable payload.
+                    Result.Error(LogsDataError)
+                } else {
+                    // Validating and mapping ~5,000 entries is CPU work, so it moves off the
+                    // caller's thread. The Retrofit call itself already suspends.
+                    withContext(defaultDispatcher) { body.toLogBatch() }
                 }
             } catch (cancellation: CancellationException) {
                 // Must come first and stay `kotlinx.coroutines.CancellationException`: swallowing
-                // it here would make a cancelled load look handled instead of cancelled.
+                // it here would make a cancelled load look handled instead of cancelled. It is
+                // also a `RuntimeException`, so the catch below would otherwise absorb it.
                 throw cancellation
-            } catch (_: SocketTimeoutException) {
-                Result.Error(LogsDataError.Timeout)
-            } catch (_: UnknownHostException) {
-                Result.Error(LogsDataError.Connectivity)
-            } catch (_: ConnectException) {
-                Result.Error(LogsDataError.Connectivity)
-            } catch (_: NoRouteToHostException) {
-                Result.Error(LogsDataError.Connectivity)
-            } catch (_: SerializationException) {
-                Result.Error(LogsDataError.Serialization)
             } catch (_: IOException) {
-                Result.Error(LogsDataError.Unknown)
+                // Connectivity loss and timeouts: `UnknownHostException`, `ConnectException`,
+                // `NoRouteToHostException`, `SocketTimeoutException`.
+                Result.Error(LogsDataError)
             } catch (_: RuntimeException) {
-                Result.Error(LogsDataError.Unknown)
+                // Decoding failures (`SerializationException`) and anything else unexpected.
+                Result.Error(LogsDataError)
             }
     }
