@@ -11,20 +11,32 @@ illustrative example below (module/package layout, a specific class name, whethe
 `DataSource` abstraction exists for the logs feature), `ARCHITECTURE.md` wins. For this
 project specifically:
 
-- The approved package layout is `data/remote`, `data/model`, `data/mapper`,
-  `data/repository`, `data/error`, `data/di` (see `ARCHITECTURE.md` → *Gradle modules*),
-  not the flat `data/LogsRepository.kt` layout shown in the illustrative examples below.
-- The repository implementation is named `NetworkLogsRepository` (named for its data
-  strategy per `ARCHITECTURE.md`), not `DefaultLogsRepository`.
-- `LogsRepository` currently wraps `LogsApi` directly with no separate
-  `LogsRemoteDataSource` interface — consistent with §6 below (*Do Not Create
-  Unnecessary Data Source Abstractions*), since there is only one implementation and no
-  planned second source.
+- The approved data package layout is `data/remote`, `data/local`, `data/model`,
+  `data/mapper`, `data/repository`, `data/error`, `data/di`, with one focused
+  `domain/query` policy above it (see `ARCHITECTURE.md` → *Gradle modules*). The flat
+  `data/LogsRepository.kt` layouts below remain illustrative rather than literal.
+- Step 5's `NetworkLogsRepository` is a transitional remote-only baseline. Step 8
+  replaces it with `SnapshotLogsRepository`, named for its complete-remote-snapshot to
+  Room strategy, rather than the generic `DefaultLogsRepository` used in examples.
+- The revised repository coordinates `LogsApi` and the feature-owned Room database.
+  Separate remote/local Data Source interfaces are still optional: add one only when
+  multiple implementations or meaningful test/lifecycle isolation justify it, not
+  merely because two infrastructure sources now exist.
+- Room is the post-refresh source of truth, and Paging 3 carries the bounded row working
+  set. The immutable `LogQuery` repository input remains in `data/model`; the focused
+  domain policy owns its normalization and coordinates page/aggregate streams without
+  moving the repository contract into domain.
 - Hilt is the project's DI framework (see §12); the framework-agnostic examples below
   apply equally to Hilt constructor injection.
-- Use this project's existing typed `Result<T, DataError>` / `EmptyResult` wrapper and
+- Use this project's existing typed `Result<T, E : Error>` / `EmptyResult` wrapper and
   its `map`/`onSuccess`/`onFailure` helpers rather than redefining a parallel `Result`
-  type — see §11.
+  type — see §11. It lives in `:feature:logs`, not `:core:network`.
+- The feature's repository failure is a single `LogsDataError` value, not the multi-case
+  hierarchy the illustrative example in §11 shows — see *Match error granularity to
+  behavior* in that section.
+- Data-layer Hilt bindings for the API, Room database/DAO, repository, and required
+  dispatchers live in one feature module (`LogsDataModule`), not one module per binding
+  — see §12.
 
 ## 1. Architectural Baseline
 
@@ -505,10 +517,27 @@ Result<T, DataError>
 ```
 
 This is a project convention rather than a requirement of Android Architecture Guidance.
-In this project, reuse the existing `Result<T, DataError>` / `EmptyResult` wrapper and its
+In this project, reuse the existing `Result<T, E : Error>` / `EmptyResult` wrapper and its
 `map`/`onSuccess`/`onFailure` helpers instead of introducing a second, parallel `Result`
 type — one typed-result convention per codebase avoids ambiguity between it and
 `kotlin.Result` from the standard library.
+
+The wrapper stays in `:feature:logs`. It is a result convention, not network
+infrastructure, so it does not belong in `:core:network`; promote it to a neutral shared
+module only when a second feature genuinely reuses it.
+
+### Match Error Granularity to Behavior
+
+The hierarchy above illustrates the shape of a typed error, not a target to reproduce.
+Split a failure into separate cases only where a consumer behaves differently for each —
+different retry policy, different user-facing copy, different recovery path. Cases that
+every caller handles identically add naming, mapping, and test surface while changing no
+behavior, and they invite `when` branches that all do the same thing.
+
+In this project, `LogsDataError` is a single value: a failed load produces the same
+retryable error state whatever caused it. Connectivity loss, timeout, a non-2xx response,
+undecodable JSON, and a semantically invalid payload therefore collapse into one failure.
+Classify further only when a caller can act on the difference.
 
 ### Preserve Coroutine Cancellation
 
@@ -572,6 +601,20 @@ project uses Hilt (see `ARCHITECTURE.md` → *Dependency injection*); apply the 
 injection shown above via `@Inject constructor` and provide bindings/modules under each
 feature's `data/di` package.
 
+### One Module Per Owner, Not Per Binding
+
+Group a feature's data-layer bindings into a single module — in this project,
+`LogsDataModule` holds the endpoint API, Room database/DAO, repository binding, and
+required data dispatchers. Splitting them across a module per binding adds files,
+imports, and headers without introducing a boundary: they share one component, one
+lifetime, and one owner.
+
+Add a second module when something real separates it — a different component or scope, a
+binding another module must be able to replace in tests, or an owner outside the feature.
+
+Since `@Binds` methods must be abstract and `@Provides` methods must not be, one module
+holding both is an abstract class whose `@Provides` bindings live in its companion object.
+
 ## 13. Source of Truth
 
 Each Repository should have a clearly defined Single Source of Truth for the data it exposes.
@@ -584,6 +627,11 @@ The source of truth may be:
 
 It is not automatically a local database.
 The Repository is responsible for ensuring that data exposed to higher layers represents its chosen source of truth.
+
+For this feature, `ARCHITECTURE.md` makes the concrete choice: after a successful launch
+refresh, Room is the source of truth for paged rows, aggregate summaries, filter options,
+and details. The network supplies replacement snapshots; it is not queried for repeated
+screen reads.
 
 ## 14. Naming
 
@@ -697,10 +745,11 @@ presentation
 The Repository interface remains in `data`.
 
 > This project's approved `feature/logs` layout is documented in `ARCHITECTURE.md` →
-> *Gradle modules* (`data/remote`, `data/model`, `data/mapper`, `data/repository`,
-> `data/error`, `data/di`). Treat the layouts above as generic illustrations of the
-> dependency direction and the "Repository interface lives in `data`" rule, not as a
-> literal restructuring of this project.
+> *Gradle modules* (`data/remote`, `data/local`, `data/model`, `data/mapper`,
+> `data/repository`, `data/error`, `data/di`, plus focused `domain/query`). Treat the
+> layouts above as generic illustrations of the dependency direction and the
+> "Repository interface lives in `data`" rule, not as a literal restructuring of this
+> project.
 
 ## 16. Testing Boundaries
 
@@ -755,7 +804,9 @@ Before adding or modifying a data feature:
 * One-shot operations use `suspend`; observable changing data uses `Flow`.
 * Data and Domain APIs are main-safe.
 * Coroutine cancellation is never converted into a normal application error.
+* Error cases exist only where a consumer behaves differently for each of them.
 * Data-source or framework exceptions do not accidentally leak into the UI.
+* DI modules are grouped by owner and lifetime rather than one module per binding.
 * Implementations use meaningful names rather than generic `Impl` suffixes.
 
 ## Core Rule
