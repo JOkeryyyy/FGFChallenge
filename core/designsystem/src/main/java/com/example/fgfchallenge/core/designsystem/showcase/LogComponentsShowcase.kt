@@ -27,6 +27,7 @@ import com.example.fgfchallenge.core.designsystem.component.SeverityIndicator
 import com.example.fgfchallenge.core.designsystem.component.TagBadge
 import com.example.fgfchallenge.core.designsystem.model.LogDetailsUi
 import com.example.fgfchallenge.core.designsystem.model.SeverityBadgeTone
+import com.example.fgfchallenge.core.designsystem.model.SeverityDensityUi
 import com.example.fgfchallenge.core.designsystem.model.SeverityLegendItem
 import com.example.fgfchallenge.core.designsystem.theme.FGFChallengeTheme
 import com.example.fgfchallenge.core.designsystem.token.Dimens
@@ -49,13 +50,21 @@ private val ShowcaseRows =
         ShowcaseRowFixture("DEBUG", SeverityBadgeTone.Debug, "cache", "Cache lookup key=1234", "11.098"),
     )
 
-private val ShowcaseLegendItems =
-    listOf(
-        SeverityLegendItem("ERROR", 1_256, SeverityBadgeTone.Error),
-        SeverityLegendItem("FATAL", 794, SeverityBadgeTone.Fatal),
-        SeverityLegendItem("WARN", 1_143, SeverityBadgeTone.Warn),
-        SeverityLegendItem("INFO", 1_207, SeverityBadgeTone.Info),
-        SeverityLegendItem("DEBUG", 600, SeverityBadgeTone.Debug),
+// The wireframe's populated state: 1,256 ERROR + 794 FATAL of 5,000 -> 41%. Ring fractions and
+// legend counts are stated together here so the catalog cannot show a ring that contradicts them.
+private val ShowcaseDensity =
+    SeverityDensityUi(
+        densityPercent = 41,
+        errorFraction = 1_256f / 5_000f,
+        fatalFraction = 794f / 5_000f,
+        legendItems =
+            listOf(
+                SeverityLegendItem("ERROR", 1_256, SeverityBadgeTone.Error),
+                SeverityLegendItem("FATAL", 794, SeverityBadgeTone.Fatal),
+                SeverityLegendItem("WARN", 1_143, SeverityBadgeTone.Warn),
+                SeverityLegendItem("INFO", 1_207, SeverityBadgeTone.Info),
+                SeverityLegendItem("DEBUG", 600, SeverityBadgeTone.Debug),
+            ),
     )
 
 private val ShowcaseDetails =
@@ -117,18 +126,7 @@ fun LogComponentsShowcase(modifier: Modifier = Modifier) {
             ShowcaseSection(title = "Minute header") {
                 Column {
                     LogMinuteHeader(minute = "17:11", itemCount = 12)
-                    LogMinuteHeader(
-                        minute = "17:10",
-                        itemCount = 8,
-                        isCollapsed = false,
-                        onCollapsedChange = {},
-                    )
-                    LogMinuteHeader(
-                        minute = "17:09",
-                        itemCount = 5,
-                        isCollapsed = true,
-                        onCollapsedChange = {},
-                    )
+                    LogMinuteHeader(minute = "17:10", itemCount = 8)
                 }
             }
 
@@ -137,12 +135,7 @@ fun LogComponentsShowcase(modifier: Modifier = Modifier) {
             }
 
             ShowcaseSection(title = "Severity indicator") {
-                SeverityIndicator(
-                    totalLogCount = 5_000,
-                    errorCount = 1_039,
-                    fatalCount = 1_011,
-                    legendItems = ShowcaseLegendItems,
-                )
+                SeverityIndicator(density = ShowcaseDensity)
             }
 
             ShowcaseSection(title = "Loading content") {

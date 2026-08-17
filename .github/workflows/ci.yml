@@ -37,4 +37,5 @@ jobs:
             :core:designsystem:verifyPaparazziDebug \
             :app:assembleDebug \
             :app:compileDebugAndroidTestSources \
+            :core:designsystem:compileDebugAndroidTestSources \
             --stacktrace

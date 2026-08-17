@@ -16,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -63,10 +64,11 @@ fun LoadingContent(modifier: Modifier = Modifier) {
                 horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // No placeholder for the row's time column: the wireframe's loading state shows
+                // skeleton placeholders only, with the timestamp position left empty.
                 SkeletonBlock(modifier = Modifier.width(56.dp).height(20.dp))
                 SkeletonBlock(modifier = Modifier.width(88.dp).height(20.dp))
                 SkeletonBlock(modifier = Modifier.weight(1f).height(20.dp))
-                SkeletonBlock(modifier = Modifier.width(40.dp).height(20.dp))
             }
         }
     }
@@ -80,8 +82,13 @@ private fun SkeletonBlock(
     Box(
         modifier =
             modifier
-                .background(color = MaterialTheme.colorScheme.surfaceVariant, shape = shape)
-                .shimmerEffect(),
+                // clip() comes first so the shimmer band, which draws an unclipped rect, stays
+                // inside the block's own shape instead of tinting the corners around it.
+                .clip(shape)
+                .background(color = MaterialTheme.colorScheme.surfaceVariant)
+                .shimmerEffect(
+                    highlightColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f),
+                ),
     )
 }
 

@@ -28,6 +28,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.fgfchallenge.core.designsystem.R
 import com.example.fgfchallenge.core.designsystem.model.SeverityBadgeTone
+import com.example.fgfchallenge.core.designsystem.model.SeverityDensityUi
 import com.example.fgfchallenge.core.designsystem.model.SeverityLegendItem
 import com.example.fgfchallenge.core.designsystem.theme.FGFChallengeTheme
 import com.example.fgfchallenge.core.designsystem.theme.containerColor
@@ -37,22 +38,22 @@ import kotlin.math.roundToInt
 private val RingSize = 72.dp
 private val RingStrokeWidth = 8.dp
 private val NarrowLegendThreshold = 380.dp
+private const val FULL_SWEEP = 360f
 
 /**
  * Custom Canvas density indicator: a neutral track plus contiguous ERROR/FATAL arcs whose
  * combined sweep is the error density. The whole component collapses to one semantics node
  * carrying a complete description, since the Canvas itself exposes nothing on its own.
+ *
+ * Everything it draws comes from [density]; it performs no severity arithmetic of its own, so the
+ * ring and the legend always describe the same result set.
  */
 @Composable
 fun SeverityIndicator(
-    totalLogCount: Int,
-    errorCount: Int,
-    fatalCount: Int,
-    legendItems: List<SeverityLegendItem>,
+    density: SeverityDensityUi,
     modifier: Modifier = Modifier,
 ) {
-    val percentage = densityPercentage(totalLogCount, errorCount, fatalCount)
-    val description = severityIndicatorDescription(percentage, legendItems)
+    val description = severityIndicatorDescription(density.densityPercent, density.legendItems)
     val descriptionModifier =
         Modifier
             .fillMaxWidth()
@@ -65,8 +66,11 @@ fun SeverityIndicator(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
-                SeverityRing(percentage, totalLogCount, errorCount, fatalCount)
-                SeverityLegendGrid(legendItems = legendItems, modifier = Modifier.fillMaxWidth())
+                SeverityRing(density)
+                SeverityLegendGrid(
+                    legendItems = density.legendItems,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         } else {
             Row(
@@ -74,25 +78,25 @@ fun SeverityIndicator(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
-                SeverityRing(percentage, totalLogCount, errorCount, fatalCount)
-                SeverityLegendColumn(legendItems = legendItems, modifier = Modifier.weight(1f))
+                SeverityRing(density)
+                SeverityLegendColumn(
+                    legendItems = density.legendItems,
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun SeverityRing(
-    percentage: Int,
-    totalLogCount: Int,
-    errorCount: Int,
-    fatalCount: Int,
-) {
+private fun SeverityRing(density: SeverityDensityUi) {
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
     val errorColor = SeverityBadgeTone.Error.containerColor
     val fatalColor = SeverityBadgeTone.Fatal.containerColor
-    val errorSweep = if (totalLogCount <= 0) 0f else 360f * errorCount / totalLogCount
-    val fatalSweep = if (totalLogCount <= 0) 0f else 360f * fatalCount / totalLogCount
+    // Clamped so out-of-range input degrades into a full ring instead of overdrawing the track.
+    // This is defensive drawing, not a density calculation — that belongs to presentation.
+    val errorSweep = FULL_SWEEP * density.errorFraction.coerceIn(0f, 1f)
+    val fatalSweep = (FULL_SWEEP * density.fatalFraction.coerceIn(0f, 1f)).coerceAtMost(FULL_SWEEP - errorSweep)
 
     Box(modifier = Modifier.size(RingSize), contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.size(RingSize)) {
@@ -105,7 +109,7 @@ private fun SeverityRing(
             drawArc(
                 color = trackColor,
                 startAngle = 0f,
-                sweepAngle = 360f,
+                sweepAngle = FULL_SWEEP,
                 useCenter = false,
                 topLeft = topLeft,
                 size = arcSize,
@@ -135,7 +139,7 @@ private fun SeverityRing(
             }
         }
         Text(
-            text = "$percentage%",
+            text = "${density.densityPercent}%",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -202,15 +206,6 @@ private fun SeverityLegendRow(
     }
 }
 
-private fun densityPercentage(
-    totalLogCount: Int,
-    errorCount: Int,
-    fatalCount: Int,
-): Int {
-    if (totalLogCount <= 0) return 0
-    return (((errorCount + fatalCount).toFloat() / totalLogCount) * 100).roundToInt()
-}
-
 @Composable
 private fun severityIndicatorDescription(
     percentage: Int,
@@ -227,6 +222,29 @@ private fun severityIndicatorDescription(
     return "$prefix. $legendText"
 }
 
+/**
+ * Preview-only fixture builder. Production callers receive a [SeverityDensityUi] already computed
+ * by presentation; deriving it from counts here keeps ring and legend coherent in previews without
+ * putting the calculation back into the component.
+ */
+private fun previewDensity(
+    totalLogCount: Int,
+    legendItems: List<SeverityLegendItem>,
+): SeverityDensityUi {
+    val errorCount = legendItems.firstOrNull { it.tone == SeverityBadgeTone.Error }?.count ?: 0
+    val fatalCount = legendItems.firstOrNull { it.tone == SeverityBadgeTone.Fatal }?.count ?: 0
+    if (totalLogCount <= 0) {
+        return SeverityDensityUi(0, 0f, 0f, legendItems)
+    }
+    return SeverityDensityUi(
+        densityPercent = (((errorCount + fatalCount).toFloat() / totalLogCount) * 100).roundToInt(),
+        errorFraction = errorCount.toFloat() / totalLogCount,
+        fatalFraction = fatalCount.toFloat() / totalLogCount,
+        legendItems = legendItems,
+    )
+}
+
+// Matches the wireframe's populated state: 1,256 ERROR + 794 FATAL of 5,000 -> 41%.
 private val PreviewLegendItems =
     listOf(
         SeverityLegendItem("ERROR", 1_256, SeverityBadgeTone.Error),
@@ -250,10 +268,7 @@ private val ZeroDensityLegendItems =
 private fun SeverityIndicatorZeroPercentPreview() {
     FGFChallengeTheme {
         SeverityIndicator(
-            totalLogCount = 5_000,
-            errorCount = 0,
-            fatalCount = 0,
-            legendItems = ZeroDensityLegendItems,
+            density = previewDensity(totalLogCount = 5_000, legendItems = ZeroDensityLegendItems),
             modifier = Modifier.padding(16.dp),
         )
     }
@@ -264,10 +279,7 @@ private fun SeverityIndicatorZeroPercentPreview() {
 private fun SeverityIndicatorFortyOnePercentPreview() {
     FGFChallengeTheme {
         SeverityIndicator(
-            totalLogCount = 5_000,
-            errorCount = 1_039,
-            fatalCount = 1_011,
-            legendItems = PreviewLegendItems,
+            density = previewDensity(totalLogCount = 5_000, legendItems = PreviewLegendItems),
             modifier = Modifier.padding(16.dp),
         )
     }
@@ -278,13 +290,14 @@ private fun SeverityIndicatorFortyOnePercentPreview() {
 private fun SeverityIndicatorHundredPercentPreview() {
     FGFChallengeTheme {
         SeverityIndicator(
-            totalLogCount = 100,
-            errorCount = 60,
-            fatalCount = 40,
-            legendItems =
-                listOf(
-                    SeverityLegendItem("ERROR", 60, SeverityBadgeTone.Error),
-                    SeverityLegendItem("FATAL", 40, SeverityBadgeTone.Fatal),
+            density =
+                previewDensity(
+                    totalLogCount = 100,
+                    legendItems =
+                        listOf(
+                            SeverityLegendItem("ERROR", 60, SeverityBadgeTone.Error),
+                            SeverityLegendItem("FATAL", 40, SeverityBadgeTone.Fatal),
+                        ),
                 ),
             modifier = Modifier.padding(16.dp),
         )

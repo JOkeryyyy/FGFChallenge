@@ -3,10 +3,6 @@
     <string name="log_search_field_placeholder">Search message, tag, severity</string>
     <string name="log_search_field_clear_action">Clear search</string>
 
-    <!-- LogMinuteHeader -->
-    <string name="log_minute_header_collapse_action">Collapse minute group</string>
-    <string name="log_minute_header_expand_action">Expand minute group</string>
-
     <!-- SeverityIndicator -->
     <!-- "percent" does not inflect in English, so a <plurals> resource adds no value here. -->
     <string name="severity_indicator_description" tools:ignore="PluralsCandidate">Error density %1$d percent</string>

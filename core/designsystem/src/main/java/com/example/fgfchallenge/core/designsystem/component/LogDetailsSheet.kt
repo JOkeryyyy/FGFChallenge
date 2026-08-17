@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -20,11 +23,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import com.example.fgfchallenge.core.designsystem.R
 import com.example.fgfchallenge.core.designsystem.model.LogDetailsUi
 import com.example.fgfchallenge.core.designsystem.model.SeverityBadgeTone
 import com.example.fgfchallenge.core.designsystem.theme.FGFChallengeTheme
 import com.example.fgfchallenge.core.designsystem.token.Spacing
+
+/**
+ * Fixed label column so every label starts at the same x and the value column absorbs the rest of
+ * the width; long values (log ID, session ID, full UTC timestamp) wrap inside their own column.
+ */
+private val labelColumnWidth = 116.dp
 
 /**
  * Read-only structured log details. Close, swipe-down, and Back dismissal all come from
@@ -61,6 +71,10 @@ private fun LogDetailsSheetContent(
         modifier =
             modifier
                 .fillMaxWidth()
+                // Long values and large font scales can push the property list past the sheet's
+                // height; ModalBottomSheet nested-scrolls with a scrollable child, so drag-to-
+                // dismiss still works.
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = Spacing.lg, vertical = Spacing.md),
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
@@ -81,7 +95,12 @@ private fun LogDetailsSheetContent(
             }
         }
         HorizontalDivider()
-        DetailRow(stringResource(R.string.log_details_label_severity)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+            verticalAlignment = Alignment.Top,
+        ) {
+            DetailLabel(stringResource(R.string.log_details_label_severity))
             SeverityBadge(label = details.severityLabel, tone = details.severityTone)
         }
         DetailRow(stringResource(R.string.log_details_label_message), details.message)
@@ -94,12 +113,18 @@ private fun LogDetailsSheetContent(
     }
 }
 
+/** Top alignment keeps the label level with the first line of a value that wraps. */
 @Composable
 private fun DetailRow(
     label: String,
     value: String,
 ) {
-    DetailRow(label = label) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+        verticalAlignment = Alignment.Top,
+    ) {
+        DetailLabel(label)
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
@@ -109,23 +134,13 @@ private fun DetailRow(
 }
 
 @Composable
-private fun DetailRow(
-    label: String,
-    content: @Composable () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
-        )
-        content()
-    }
+private fun DetailLabel(label: String) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.width(labelColumnWidth),
+    )
 }
 
 @Preview
@@ -144,7 +159,7 @@ private fun LogDetailsSheetPreview() {
                         latency = "3,245 ms",
                         aiGenerated = "No",
                         logId = "a1b2c3d4-e5f6-7890-abcd-1234567890ef",
-                        sessionId = "sess-7f3a9b21-7cd4-4d6d-9a12-3f5e7d9a1b2c",
+                        sessionId = "sess-7f3a9b21-7cd4-4d6d-9a12-3f5e7d9a1b2c3f5e7d9a1b2c",
                     ),
                 onDismissRequest = {},
             )
