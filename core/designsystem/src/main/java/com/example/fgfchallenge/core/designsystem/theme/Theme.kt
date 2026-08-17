@@ -12,6 +12,7 @@ fun FGFChallengeTheme(
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         typography = FGFChallengeTypography,
+        shapes = FGFChallengeShapes,
         content = content,
     )
 }
