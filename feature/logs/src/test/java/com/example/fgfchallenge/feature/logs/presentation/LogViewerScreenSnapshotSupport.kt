@@ -28,7 +28,13 @@ internal val wideDeviceConfig: DeviceConfig =
         density = Density.XHIGH,
     )
 
-/** Renders one fixture state with no-op callbacks, matching how `LogsFeature` mounts it today. */
+/**
+ * Renders one fixture state with a discarded action callback, which is what a golden needs: these
+ * pin the rendered result of a state, not what an interaction does with it.
+ *
+ * No fixture selects a log, so no golden covers the details sheet — `ModalBottomSheet` hosts its
+ * content in a separate window that Paparazzi's single-window render never captures.
+ */
 internal fun Paparazzi.snapshotLogViewerScreen(
     fixture: LogViewerFixture,
     darkTheme: Boolean,
@@ -37,11 +43,7 @@ internal fun Paparazzi.snapshotLogViewerScreen(
         FGFChallengeTheme(darkTheme = darkTheme) {
             LogViewerScreen(
                 state = logViewerFixtureState(fixture),
-                onQueryChange = {},
-                onSortToggle = {},
-                onRetry = {},
-                onErrorDismiss = {},
-                onRowClick = {},
+                onAction = {},
             )
         }
     }
