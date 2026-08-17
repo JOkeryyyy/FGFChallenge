@@ -1,6 +1,7 @@
 package com.example.fgfchallenge.feature.logs.data.model
 
 import java.time.Instant
+import java.util.Locale
 
 /**
  * The immutable application models `LogsRepository` exposes. They are the only log types that
@@ -20,18 +21,23 @@ internal data class LogBatch(
     val entries: List<LogEntry>,
 )
 
+/**
+ * One log record as the rest of the app sees it.
+ *
+ * The fields are flat rather than nesting the payload's `metadata` object: they are all equally
+ * queryable columns once persisted, and a snapshot is ~100,000 records, where a second object per
+ * row buys nothing. [sessionId] comes from the response envelope and is carried on every entry so
+ * a details lookup by ID needs no second read.
+ */
 internal data class LogEntry(
     val id: String,
     val timestamp: Instant,
     val severity: Severity,
     val tag: String,
     val message: String,
-    val metadata: LogMetadata,
-)
-
-internal data class LogMetadata(
     val latencyMs: Long,
     val isAiGenerated: Boolean,
+    val sessionId: String,
 )
 
 /**
@@ -45,4 +51,19 @@ internal enum class Severity {
     ERROR,
     FATAL,
     UNKNOWN,
+    ;
+
+    internal companion object {
+        /**
+         * Resolves a severity name from either boundary — the remote payload or a stored row.
+         *
+         * An unrecognized value is [UNKNOWN] rather than a failure: a new severity in the payload
+         * is forward compatibility, not a corrupt snapshot. It stays valid data that counts toward
+         * the total, and is never folded into the error numerator.
+         */
+        fun fromNameOrUnknown(value: String): Severity {
+            val normalized = value.trim().uppercase(Locale.ROOT)
+            return entries.firstOrNull { it.name == normalized } ?: UNKNOWN
+        }
+    }
 }

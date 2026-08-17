@@ -1,5 +1,9 @@
 package com.example.fgfchallenge.feature.logs.data.di
 
+import android.content.Context
+import androidx.room.Room
+import com.example.fgfchallenge.feature.logs.data.local.LogsDao
+import com.example.fgfchallenge.feature.logs.data.local.LogsDatabase
 import com.example.fgfchallenge.feature.logs.data.remote.LogsApi
 import com.example.fgfchallenge.feature.logs.data.repository.LogsRepository
 import com.example.fgfchallenge.feature.logs.data.repository.NetworkLogsRepository
@@ -7,6 +11,7 @@ import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -26,8 +31,8 @@ import javax.inject.Singleton
 internal annotation class DefaultDispatcher
 
 /**
- * The logs data layer's only Hilt module: the endpoint API, the repository binding, and the
- * mapping dispatcher.
+ * The logs data layer's only Hilt module: the endpoint API, the snapshot database and its DAO, the
+ * repository binding, and the mapping dispatcher.
  *
  * These bindings are kept together rather than split per concern because they share one lifetime
  * and one owner; separate modules would add files without adding an architectural boundary. The
@@ -49,6 +54,22 @@ internal abstract class LogsDataModule {
         @Provides
         @Singleton
         fun provideLogsApi(retrofit: Retrofit): LogsApi = retrofit.create()
+
+        /**
+         * Scoped to the application: opening the database is expensive, and one instance is what
+         * lets Room invalidate the active queries when the snapshot is replaced.
+         */
+        @Provides
+        @Singleton
+        fun provideLogsDatabase(
+            @ApplicationContext context: Context,
+        ): LogsDatabase =
+            Room
+                .databaseBuilder(context, LogsDatabase::class.java, LogsDatabase.NAME)
+                .build()
+
+        @Provides
+        fun provideLogsDao(database: LogsDatabase): LogsDao = database.logsDao()
 
         @Provides
         @DefaultDispatcher

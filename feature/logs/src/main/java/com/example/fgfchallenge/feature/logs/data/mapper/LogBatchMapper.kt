@@ -4,13 +4,11 @@ import com.example.fgfchallenge.feature.logs.data.error.LogsDataError
 import com.example.fgfchallenge.feature.logs.data.error.Result
 import com.example.fgfchallenge.feature.logs.data.model.LogBatch
 import com.example.fgfchallenge.feature.logs.data.model.LogEntry
-import com.example.fgfchallenge.feature.logs.data.model.LogMetadata
 import com.example.fgfchallenge.feature.logs.data.model.Severity
 import com.example.fgfchallenge.feature.logs.data.remote.LogEntryDto
 import com.example.fgfchallenge.feature.logs.data.remote.LogsPayloadDto
 import java.time.Instant
 import java.time.format.DateTimeParseException
-import java.util.Locale
 
 /**
  * Turns a decoded [LogsPayloadDto] into the immutable [LogBatch] the repository exposes, and
@@ -26,7 +24,7 @@ internal fun LogsPayloadDto.toLogBatch(): Result<LogBatch, LogsDataError> {
 
     val mapped = ArrayList<LogEntry>(entries.size)
     for (dto in entries) {
-        mapped += dto.toLogEntryOrNull() ?: return Result.Error(LogsDataError)
+        mapped += dto.toLogEntryOrNull(sessionId) ?: return Result.Error(LogsDataError)
     }
 
     // A reported/actual count mismatch is not a failure: consumers count `entries`, and the
@@ -40,7 +38,11 @@ internal fun LogsPayloadDto.toLogBatch(): Result<LogBatch, LogsDataError> {
     )
 }
 
-private fun LogEntryDto.toLogEntryOrNull(): LogEntry? {
+/**
+ * [batchSessionId] comes from the response envelope: the payload has no per-entry session, but
+ * every entry carries it so a stored row is self-contained.
+ */
+private fun LogEntryDto.toLogEntryOrNull(batchSessionId: String): LogEntry? {
     if (id.isBlank() || tag.isBlank() || message.isBlank()) return null
     if (metadata.latencyMs < 0) return null
     val parsedTimestamp = timestamp.toInstantOrNull() ?: return null
@@ -50,14 +52,12 @@ private fun LogEntryDto.toLogEntryOrNull(): LogEntry? {
         timestamp = parsedTimestamp,
         // Severity is normalized rather than validated: an unrecognized value is a forward
         // compatibility case, not a corrupt payload.
-        severity = severity.toSeverity(),
+        severity = Severity.fromNameOrUnknown(severity),
         tag = tag,
         message = message,
-        metadata =
-            LogMetadata(
-                latencyMs = metadata.latencyMs,
-                isAiGenerated = metadata.isAiGenerated,
-            ),
+        latencyMs = metadata.latencyMs,
+        isAiGenerated = metadata.isAiGenerated,
+        sessionId = batchSessionId,
     )
 }
 
@@ -67,8 +67,3 @@ private fun String.toInstantOrNull(): Instant? =
     } catch (_: DateTimeParseException) {
         null
     }
-
-private fun String.toSeverity(): Severity {
-    val normalized = trim().uppercase(Locale.ROOT)
-    return Severity.entries.firstOrNull { it.name == normalized } ?: Severity.UNKNOWN
-}

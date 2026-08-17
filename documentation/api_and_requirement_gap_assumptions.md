@@ -12,8 +12,8 @@ This document resolves implementation-significant gaps in the original take-home
 | **Target scale** | The original brief says 5,000+ without a maximum. | The product must handle one complete snapshot of approximately 100,000 records. The supplied 5,000 records remain the schema/development fixture. |
 | **Remote shape** | The brief does not define remote pagination, deltas, or streaming. | The endpoint returns one authoritative complete snapshot in one request. There is no remote pagination, streaming, or incremental synchronization. |
 | **Startup refresh** | Refresh cadence is unspecified. | Every app launch attempts one complete refresh. No automatic second request is made; Retry is explicit after a failed attempt. |
-| **Snapshot integrity** | Partial-response and replacement behavior are unspecified. | Decode, validate, and map the entire response before Room mutation. Replace the old snapshot in one transaction so observers never see an empty or partial snapshot. |
-| **Failure with retained data** | The brief does not define stale-data behavior. | Network, validation, cancellation, or database failure leaves the prior complete snapshot intact, but the launch remains a retryable failure and retained rows are not represented as current. |
+| **Snapshot replacement** | Partial-response and replacement behavior are unspecified. | Decode and map the response before Room mutation. Replace the old snapshot in one transaction so observers never see an empty or partial snapshot. |
+| **Failure with retained data** | The brief does not define stale-data behavior. | Network, decoding/mapping, cancellation, or database failure leaves the prior complete snapshot intact, but the launch remains a retryable failure and retained rows are not represented as current. |
 | **Local source of truth** | Local persistence is unspecified. | After refresh succeeds, feature-owned Room is the only source for list rows, aggregates, filter options, and details. This is local snapshot storage, not a broader offline-first promise. |
 | **Searchable fields** | “Search across logs” does not identify fields. | Free text searches `message` or `id` only. Tag and severity are available exclusively through structured filters. |
 | **Search semantics** | Fuzzy, tokenized, regex, wildcard, and semantic behavior are undefined. | Use case-insensitive literal substring matching. Escape SQLite wildcard characters so `%` and `_` remain literal input. Blank search is inactive. |
@@ -29,7 +29,7 @@ This document resolves implementation-significant gaps in the original take-home
 | **Unexpected severity** | Forward compatibility is undefined. | Map unrecognized values to `UNKNOWN`. Include them in total and UNKNOWN counts, but not the error numerator. The first filter UI exposes the five known severities. |
 | **No-results timing** | Paging can temporarily have zero loaded rows while work is active. | Show no results only after the current aggregate query completes with total count zero. |
 | **Details lookup** | It is unclear whether details depend on loaded rows. | Resolve details by stable log ID through the repository so later-page rows remain selectable without retaining all rows in UI state. |
-| **UI quality** | “Pixel-perfect” has no supplied production design. | Follow `UIWireframe.png` as the behavioral low-fidelity contract and produce polished, deterministic Material 3 UI across representative widths and light/dark themes. |
+| **UI quality** | “Pixel-perfect” has no supplied production design. | Follow `UIWireframe.png` as the behavioral low-fidelity contract. |
 
 ## Canonical query semantics
 
@@ -79,14 +79,12 @@ The launch sequence is:
 
 1. Enter startup loading.
 2. Make one complete network request.
-3. Decode and validate every required response and entry field.
-4. Verify the reported count describes the decoded entry collection and IDs do not silently collapse distinct rows.
-5. Map valid values, including UTC timestamps and `UNKNOWN` severity fallback.
-6. In one Room transaction, delete the old snapshot and insert the complete new snapshot.
-7. Treat Room invalidation as the source of subsequent query updates.
-8. Present current content only after the transaction commits.
+3. Decode and map the response, including UTC timestamps and `UNKNOWN` severity fallback.
+4. In one Room transaction, delete the old snapshot and insert the complete new snapshot.
+5. Treat Room invalidation as the source of subsequent query updates.
+6. Present current content only after the transaction commits.
 
-Cancellation is rethrown rather than converted to a data error. Any failure before commit leaves the old database unchanged. A transaction failure rolls back both deletion and insertion. Retry repeats the complete attempt; it is not a partial resume.
+Cancellation is rethrown rather than converted to a data error. Any decoding/mapping, network, or database failure before commit leaves the old database unchanged. A transaction failure rolls back both deletion and insertion. Retry repeats the complete attempt; it is not a partial resume.
 
 The response-level session ID is stored with each persisted entry or through an equivalent relation that allows an ID details lookup without retaining the remote batch in memory.
 
@@ -167,7 +165,7 @@ metadata:
     is_ai_generated: Boolean
 ```
 
-No missing fields, null values, duplicate IDs, duplicate records, or schema variations were found in that fixture. The sample's `total_count` equals its decoded record count.
+The fixture consistently follows this shape. Its `total_count` equals its decoded record count, which remains fixture evidence only.
 
 ### Observed severity distribution
 
@@ -188,7 +186,7 @@ ERROR + FATAL
 ≈ 41%
 ```
 
-This remains a useful deterministic visual/test fixture. It does not imply that a 100,000-record acceptance snapshot must have the same distribution.
+This remains a useful deterministic visual/test fixture. It does not imply that a larger snapshot must have the same distribution.
 
 ### Observed tags and messages
 
@@ -230,7 +228,7 @@ The product must not infer correlations, automatic categories, anomaly relations
 
 ## Scope boundary
 
-The approved revision requires Room, Paging 3, database-backed combined queries, aggregate queries, and one focused domain query-policy boundary. It still does not require:
+The approved revision requires Room, Paging 3, database-backed combined queries, and aggregate queries. A separate domain query-policy layer remains optional. It still does not require:
 
 ```text
 remote pagination
@@ -247,8 +245,8 @@ configurable grouping rules
 analytics or production observability infrastructure
 ```
 
-The architecture may begin with parameterized SQLite `LIKE` for literal substring search. A different search implementation is justified only by measured performance and must preserve the same arbitrary-substring behavior.
+The architecture may begin with parameterized SQLite `LIKE` for literal substring search. Do not introduce an alternate search implementation unless the supplied fixture exposes an actual problem.
 
 The resulting documentation position is:
 
-> **The app imports one validated approximately 100,000-record snapshot per launch, atomically replaces feature-owned Room storage, and answers all repeated user queries through bounded Paging plus full-result aggregates. The supplied 5,000-record payload remains evidence about schema and fixtures, not permission to materialize the complete target dataset in presentation state.**
+> **The app imports one remote snapshot per launch, atomically replaces feature-owned Room storage, and answers repeated user queries through bounded Paging plus full-result aggregates. The supplied 5,000-record payload remains the primary schema and development fixture, not permission to materialize a complete dataset in presentation state.**

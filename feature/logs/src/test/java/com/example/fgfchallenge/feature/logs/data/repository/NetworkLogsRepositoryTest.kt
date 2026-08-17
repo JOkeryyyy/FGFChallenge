@@ -7,7 +7,6 @@ import com.example.fgfchallenge.feature.logs.data.error.LogsDataError
 import com.example.fgfchallenge.feature.logs.data.error.Result
 import com.example.fgfchallenge.feature.logs.data.model.LogBatch
 import com.example.fgfchallenge.feature.logs.data.model.LogEntry
-import com.example.fgfchallenge.feature.logs.data.model.LogMetadata
 import com.example.fgfchallenge.feature.logs.data.model.Severity
 import com.example.fgfchallenge.feature.logs.data.remote.LOGS_ENDPOINT
 import com.example.fgfchallenge.feature.logs.data.remote.LogsApi
@@ -238,7 +237,9 @@ private val EXPECTED_BATCH =
                     severity = Severity.ERROR,
                     tag = "network",
                     message = "Connection timed out",
-                    metadata = LogMetadata(latencyMs = 2040, isAiGenerated = true),
+                    latencyMs = 2040,
+                    isAiGenerated = true,
+                    sessionId = "session-666",
                 ),
                 LogEntry(
                     id = "log-2",
@@ -246,7 +247,9 @@ private val EXPECTED_BATCH =
                     severity = Severity.DEBUG,
                     tag = "neural_engine",
                     message = "Inference complete",
-                    metadata = LogMetadata(latencyMs = 12, isAiGenerated = false),
+                    latencyMs = 12,
+                    isAiGenerated = false,
+                    sessionId = "session-666",
                 ),
             ),
     )

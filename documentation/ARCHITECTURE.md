@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-This document records the approved architecture for the revised Android take-home prototype. It replaces the original approximately 5,000-record in-memory design with an approximately 100,000-record Room/Paging design and is the technical source of truth for implementation Steps 7–13.
+This document records the approved architecture for the revised Android take-home prototype. It replaces the original approximately 5,000-record in-memory design with a Room/Paging design that can remain bounded for larger snapshots; it does not impose a separate performance-benchmark delivery gate.
 
 Product decisions are authoritative in this order:
 
@@ -11,14 +11,14 @@ Product decisions are authoritative in this order:
 3. [`UIWireframe.png`](UIWireframe.png)
 4. this document
 
-The supplied 5,000-record endpoint remains a schema and development fixture. It is not permission to retain a full target snapshot or every match in presentation state.
+The supplied 5,000-record endpoint remains the primary schema and development fixture. It is not permission to retain a full snapshot or every match in presentation state.
 
 ## Architectural position
 
 The app follows Google's layered Android architecture with unidirectional data flow:
 
 - presentation renders immutable state and forwards actions;
-- one focused domain boundary owns canonical query policy;
+- the ViewModel derives one immutable query value from the current UI inputs;
 - the data-layer repository remains the only public data boundary;
 - Retrofit supplies one complete remote snapshot;
 - feature-owned Room is the post-refresh source of truth;
@@ -28,10 +28,7 @@ The app follows Google's layered Android architecture with unidirectional data f
 ```mermaid
 flowchart LR
     UI["Compose UI"] --> VM["LogViewerViewModel"]
-    VM --> POLICY["Canonical log-query policy"]
-    VM --> REFRESH["Startup refresh operation"]
-    POLICY --> REPOSITORY["Data-layer LogsRepository"]
-    REFRESH --> REPOSITORY
+    VM --> REPOSITORY["Data-layer LogsRepository"]
     REPOSITORY --> REMOTE["LogsApi / Retrofit"]
     REPOSITORY --> ROOM["Feature-owned Room database"]
     ROOM --> PAGE["PagingSource rows"]
@@ -40,14 +37,14 @@ flowchart LR
     SUMMARY --> VM
 ```
 
-The domain layer is now justified because one user-visible query coordinates normalization, range validation, search debounce, latest-query cancellation, Paging, and aggregate consistency. It remains deliberately small: no use case is created per UI action, and repository contracts remain owned by data.
+No standalone domain layer is required for this one-screen prototype. The ViewModel can derive the immutable `LogQuery` and coordinate its repository streams directly; add a domain boundary only when a later feature creates genuine reuse or complexity.
 
 ## Scope and invariants
 
 The app will:
 
-- fetch one complete snapshot of approximately 100,000 structured records per app launch;
-- validate the complete response before local mutation;
+- fetch one complete remote snapshot per app launch;
+- decode and map the response before local mutation;
 - atomically replace the prior Room snapshot;
 - query Room for free text, structured filters, deterministic ordering, rows, counts, options, and details;
 - initially load 100 matching rows and append in pages of 100;
@@ -60,7 +57,7 @@ The architecture preserves these invariants:
 
 - Remote pagination, deltas, and streaming are not introduced.
 - Exactly one automatic refresh is attempted per app launch; another attempt requires Retry.
-- Room changes only after the entire response has decoded, validated, and mapped successfully.
+- Room changes only after the response has decoded and mapped successfully.
 - Snapshot deletion and insertion occur in one transaction, so failure or cancellation leaves the prior snapshot unchanged.
 - Retained data after a failed launch is not silently represented as a current successful refresh.
 - After refresh succeeds, Room is the only source for rows, summaries, filter options, and details.
@@ -127,7 +124,7 @@ Design-system components accept display-ready values and callbacks. They do not 
 
 ### `:feature:logs`
 
-Contains data, the focused domain query policy, and presentation. It exposes only `LogsFeature` to `:app`.
+Contains data and presentation. It exposes only `LogsFeature` to `:app`.
 
 ```text
 feature/logs/
@@ -137,13 +134,10 @@ feature/logs/
         remote/         LogsApi and serializable snapshot DTOs
         local/          Room database, DAO, entities, and query builder
         model/          Immutable repository-facing entries, query, summary, and options
-        mapper/         Remote/entity validation and boundary mapping
+        mapper/         Remote/entity boundary mapping
         repository/     LogsRepository and SnapshotLogsRepository
         error/          Feature-local Result and LogsDataError
         di/             LogsDataModule
-
-    domain/
-        query/          Canonical query normalization and stream coordination
 
     presentation/
         model/          Display-ready rows, filter models, summary, and list items
@@ -168,23 +162,18 @@ Presentation owns:
 - mapping repository/application entries into display-ready paged list items;
 - assembling Compose UI and rendering Paging load states.
 
-Presentation depends on the domain query boundary for query-driven rows and summaries. It may call the repository refresh, options, and details operations directly where no extra domain policy is added. It never imports or calls `SnapshotLogsRepository`, `LogsApi`, DTOs, Room database/DAO/entity/query-builder types, Retrofit, OkHttp, or SQLite.
+Presentation derives an immutable `LogQuery` and calls repository operations for query-driven rows, summaries, refresh, options, and details. It never imports or calls `SnapshotLogsRepository`, `LogsApi`, DTOs, Room database/DAO/entity/query-builder types, Retrofit, OkHttp, or SQLite.
 
-### Focused domain query policy
+### Query coordination
 
-The domain boundary owns:
+The ViewModel keeps query coordination intentionally small:
 
 - normalization of blank search, empty selections, and unconstrained values;
-- validation or normalization of UTC date/time and latency ranges;
-- immediate UI text versus debounced search execution;
-- `distinctUntilChanged` query replacement;
-- latest-query cancellation;
 - creation of one canonical `LogQuery` value;
-- coordination of the repository's paged and aggregate streams from that same value.
+- coordination of the repository's paged and aggregate streams from that same value;
+- replacement or cancellation of obsolete collections when the active query changes.
 
-It does not import Compose, Android resources, `Context`, Room, DAO/entity/query-builder types, Retrofit, SQL, or display formatters. It does not own repository interfaces, perform database queries, or add pass-through use cases for individual actions.
-
-`LogQuery` is an immutable repository input in `data/model` because `LogsRepository` owns the data contract. Domain owns how that value is derived and when a generation becomes active. This preserves the allowed dependency direction `presentation -> domain -> data` without making data depend on domain.
+No new domain package, use-case layer, or pass-through action wrapper is required. `LogQuery` is an immutable repository input in `data/model` because `LogsRepository` owns the data contract; presentation owns only its simple derivation from screen state.
 
 ### Data
 
@@ -220,7 +209,7 @@ entries[]
     metadata.isAiGenerated
 ```
 
-DTO timestamps and severity values remain strings until validation/mapping. Unknown JSON keys are ignored. Missing required values, malformed timestamps, a reported count that does not match decoded entries, or IDs that would silently collapse distinct rows invalidate the snapshot before Room mutation.
+DTO timestamps and severity values remain strings until mapping. Unknown JSON keys are ignored. A decoding or mapping failure is reported as the same retryable refresh failure as other basic data-access failures.
 
 ### Persistence entity
 
@@ -237,7 +226,7 @@ isAiGenerated: Boolean
 sessionId: String
 ```
 
-Epoch milliseconds preserve the source precision required by the product and sort as UTC instants. Timestamp plus ID supplies deterministic ties. Initial indexes cover timestamp/order and selective structured-filter columns; composite indexes are added only after representative query-plan measurements justify them.
+Epoch milliseconds preserve the source precision required by the product and sort as UTC instants. Timestamp plus ID supplies deterministic ties. Start with the small set of indexes needed by the implemented queries; add more only if the supplied fixture reveals an actual problem.
 
 ### Repository-facing models
 
@@ -316,7 +305,7 @@ sequenceDiagram
     VM->>R: refreshSnapshot()
     R->>API: one complete request
     API-->>R: snapshot DTO
-    R->>R: decode, validate, and map all entries
+    R->>R: decode and map all entries
     R->>DB: begin transaction
     R->>DB: delete prior snapshot
     R->>DB: insert complete snapshot in bounded batches
@@ -325,9 +314,9 @@ sequenceDiagram
     R-->>VM: success
 ```
 
-The full response is validated before the transaction begins. Batched entity mapping/insertion may bound temporary working copies, but all batches remain in the same transaction. Observers see the old complete snapshot or the new complete snapshot, never the delete/insert intermediate state.
+The response is decoded and mapped before the transaction begins. Batched entity mapping/insertion may bound temporary working copies, but all batches remain in the same transaction. Observers see the old complete snapshot or the new complete snapshot, never the delete/insert intermediate state.
 
-Network, decoding, schema, mapping, transaction, database, or cancellation failure before commit preserves the prior snapshot. The screen remains in retryable startup failure; the retained database is integrity/recovery state and is not labelled current. Retry repeats the complete operation.
+Network, decoding/mapping, transaction, database, or cancellation failure before commit preserves the prior snapshot. The screen remains in retryable startup failure; the retained database is integrity/recovery state and is not labelled current. Retry repeats the complete operation.
 
 Room invalidation after commit refreshes the active PagingSource, summary, filter options, and details lookups. No independent in-memory cache competes with Room.
 
@@ -395,11 +384,9 @@ Filter options are unfiltered snapshot metadata: distinct tags and dataset laten
 
 ## Query generation and cancellation
 
-The ViewModel reflects typed search text immediately. The domain boundary debounces only the database work caused by text changes. Applied filters and sort changes create a new query generation without waiting for the text debounce policy intended for keystrokes.
+The ViewModel reflects typed search text immediately and derives one immutable `LogQuery` for the active inputs. A query change replaces the paged-row and aggregate-summary collections together; use a latest-generation mechanism when necessary to avoid showing results from an obsolete query.
 
-Normalized `LogQuery` values use `distinctUntilChanged`. `flatMapLatest` or an equivalent latest-generation mechanism cancels obsolete row and summary collection. One generation passes the same query value to `pagedLogs(query)` and `summary(query)`.
-
-The active generation owns both streams. Presentation clears or marks the prior summary pending when criteria change and accepts summary data only from the active generation, so an old total cannot be labelled as belonging to new rows.
+The active generation passes the same query value to `pagedLogs(query)` and `summary(query)`. Presentation clears or marks the prior summary pending when criteria change so an old total is not labelled as belonging to new rows.
 
 ## Error handling
 
@@ -467,7 +454,7 @@ Paging transformation maps `LogEntry` to `LogRowUi` and uses separator insertion
 
 The Canvas severity indicator has a neutral circular track plus ERROR and FATAL arcs. Its percentage and adjacent legend come from the complete-result aggregate. Text labels ensure color is not the only carrier of meaning.
 
-Filter controls, load-state retry actions, rows, sort, and details dismissal expose meaningful accessibility semantics and localized labels. Previews and Paparazzi cover default, active-filter, empty, startup loading/error, Paging refresh, append loading/error, and details states in representative widths and both themes.
+Use clear visible labels for controls and load-state actions. One representative screenshot test per screen is sufficient.
 
 ## Time and display formatting
 
@@ -488,35 +475,27 @@ Hilt remains the DI framework.
 
 - `:app` provides the application/activity entry points.
 - `:core:network` provides shared network construction.
-- `:feature:logs` provides the API, Room database/DAO, `SnapshotLogsRepository`, query policy, and any explicitly required dispatchers.
+- `:feature:logs` provides the API, Room database/DAO, `SnapshotLogsRepository`, and any explicitly required dispatchers.
 - Data-layer bindings stay in `LogsDataModule`; split another module only for a genuinely different owner, component, or lifetime.
 - Constructor injection is preferred, and expensive dependencies are scoped only when their lifecycle requires it.
 
-Network decoding, validation, entity mapping, transaction work, and dynamic query work are main-safe. Room supplies asynchronous/Paging integration; explicitly blocking or CPU-heavy work changes dispatcher inside the owning class rather than forcing presentation to manage threading.
+Network decoding, entity mapping, transaction work, and dynamic query work are main-safe. Room supplies asynchronous/Paging integration; explicitly blocking or CPU-heavy work changes dispatcher inside the owning class rather than forcing presentation to manage threading.
 
-Import avoids additional full-size application/UI copies where bounded mapping or batched insertion can preserve the same validated transaction semantics.
+Import avoids additional full-size application/UI copies where bounded mapping or batched insertion can preserve the same transaction semantics.
 
-## Performance policy
+## Performance boundary
 
-The app must be measured with a deterministic approximately 100,000-record fixture on a documented emulator or device. Measurements cover network decode/validation, Room replacement, default/combined queries, aggregate queries, search changes, page append, memory, recomposition, and scrolling.
-
-Begin with parameterized SQLite `LIKE` literal-substring queries. Inspect representative query plans before adding composite indexes. A different search strategy is accepted only after evidence identifies a bottleneck and the replacement preserves arbitrary literal substring semantics; token-only FTS is not equivalent.
-
-Tune indexes, transaction batching, query construction, prefetch, and Compose recomposition only against recorded bottlenecks, then rerun the same measurements. `LogViewerUiState` size must not grow with database or result size.
+Keep the existing bounded Room/Paging design and avoid obvious main-thread work or full-result copies in `LogViewerUiState`. The supplied fixture is sufficient for a basic responsiveness check. A deterministic 100,000-record fixture, device/emulator benchmark, query-plan analysis, tuning cycle, and timing evidence are not delivery requirements.
 
 ## Verification strategy
 
-The revised architecture requires:
+Keep focused tests at the highest-value boundaries:
 
-1. Room/DAO tests for entity mapping, every condition alone, same-category OR, cross-category AND, inactive categories, literal wildcard escaping, UTC and latency boundaries, deterministic order, predicate parity, aggregates, options, and empty results.
-2. Remote/repository tests for successful refresh, second-launch replacement, complete validation, atomic rollback, retained prior snapshot, Room failure translation, retry, and cancellation.
-3. Paging tests for 100-row initial/subsequent loads, prefetch configuration, snapshot invalidation, query replacement, page-boundary minute headers, and append failure.
-4. Domain JVM tests for normalization, range conversion/validation, search debounce, `distinctUntilChanged`, latest cancellation, and same-query coordination.
-5. ViewModel JVM tests for startup refresh/error/retry, immediate search state, applied versus draft filters, active summary generation, sorting, stable-ID details, and dismissal.
-6. Paparazzi and targeted Compose tests for revised filter/Paging states, picker/slider interactions, aggregate labels, accessibility, and details behavior.
-7. A documented local device/emulator acceptance run for refresh, combined filtering, scrolling beyond 100 rows, append retry, details, and performance.
+1. Data/repository tests cover supported query behavior, a successful snapshot replacement, and a retryable refresh failure.
+2. ViewModel tests cover the principal loading/error/retry and selection paths.
+3. One representative Paparazzi screenshot test per screen demonstrates visual verification.
 
-Fakes are preferred over mocking frameworks. CI remains host-side and runs JVM/Room tests, Android Lint, ktlint, Paparazzi verification, application assembly, and instrumented-test source compilation. Critical Compose and performance flows run locally on a documented device/emulator.
+Existing instrumented tests remain in place, but no additional interaction or instrumented-test coverage is required. Fakes are preferred over mocking frameworks. CI continues its existing host-side checks without making device performance runs or a visual-state matrix delivery gates.
 
 ## Commit-time quality gate
 
@@ -544,7 +523,7 @@ Room and Paging versions are selected and verified with the existing compatible 
 
 ## Documentation and delivery constraints
 
-- `README.md` must ultimately describe the revised Room/Paging architecture, setup, commands, screenshots, recording, test strategy, and measured performance evidence.
+- `README.md` must ultimately describe the revised Room/Paging architecture, setup, commands, a representative screenshot, recording, and concise test strategy.
 - `PROMPTS.md` records material AI-assisted work.
 - The original 5,000-record requirement and dataset facts remain identifiable as provenance/fixture evidence, not active architecture limits.
 - Comments and KDoc explain non-obvious contracts and invariants rather than narrating self-explanatory code.
@@ -556,8 +535,7 @@ Steps 7–13 must derive from this document and provide:
 
 - the compatible Room/Paging dependency matrix;
 - exact files, types, DAO/query APIs, migrations, and Hilt bindings;
-- test-first implementation with red/green evidence;
+- focused implementation checks for the core behavior and basic failure paths;
 - repository migration from `NetworkLogsRepository` to the multi-source strategy;
-- requirement-to-test traceability;
-- measured 100,000-record performance evidence;
+- one representative screenshot test per screen, while retaining existing instrumented coverage;
 - final manual acceptance, recording, documentation, and delivery checks.
