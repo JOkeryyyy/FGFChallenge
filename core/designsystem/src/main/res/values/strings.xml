@@ -15,6 +15,30 @@
     <string name="error_dialog_retry_action">Retry</string>
     <string name="error_dialog_dismiss_action">Dismiss</string>
 
+    <!-- LogFilterSheet -->
+    <string name="log_filter_sheet_title">Filters</string>
+    <string name="log_filter_section_tags">Tags</string>
+    <string name="log_filter_section_severity">Severity</string>
+    <string name="log_filter_section_ai_generated">AI generated</string>
+    <string name="log_filter_section_date_time">UTC date &amp; time</string>
+    <string name="log_filter_section_latency">Latency (ms)</string>
+    <string name="log_filter_ai_any">Any</string>
+    <string name="log_filter_ai_yes">Yes</string>
+    <string name="log_filter_ai_no">No</string>
+    <string name="log_filter_tags_unavailable">No tags in the current snapshot</string>
+    <string name="log_filter_latency_unavailable">No latency range in the current snapshot</string>
+    <string name="log_filter_start_label">Start (UTC)</string>
+    <string name="log_filter_end_label">End (UTC)</string>
+    <string name="log_filter_date_placeholder">Any date</string>
+    <string name="log_filter_time_placeholder">Any time</string>
+    <string name="log_filter_select_date_range_action">Select UTC date range</string>
+    <string name="log_filter_select_start_time_action">Select start time (UTC)</string>
+    <string name="log_filter_select_end_time_action">Select end time (UTC)</string>
+    <string name="log_filter_dialog_confirm">OK</string>
+    <string name="log_filter_dialog_cancel">Cancel</string>
+    <string name="log_filter_clear_all_action">Clear All</string>
+    <string name="log_filter_apply_action">Apply</string>
+
     <!-- LogDetailsSheet -->
     <string name="log_details_sheet_title">Log Details</string>
     <string name="log_details_close_action">Close</string>

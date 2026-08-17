@@ -32,8 +32,10 @@ internal val wideDeviceConfig: DeviceConfig =
  * Renders one fixture state with a discarded action callback, which is what a golden needs: these
  * pin the rendered result of a state, not what an interaction does with it.
  *
- * No fixture selects a log, so no golden covers the details sheet — `ModalBottomSheet` hosts its
- * content in a separate window that Paparazzi's single-window render never captures.
+ * No fixture selects a log or opens a filter draft, so no golden covers either sheet —
+ * `ModalBottomSheet` hosts its content in a separate window that Paparazzi's single-window render
+ * never captures. What the goldens do pin from the filter work is its entry point: the Filter
+ * control and its active-filter badge render in the screen's own window.
  */
 internal fun Paparazzi.snapshotLogViewerScreen(
     fixture: LogViewerFixture,
