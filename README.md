@@ -11,16 +11,19 @@ Despite the product name, this milestone and the overall prototype
 deliberately exclude runtime AI, semantic/vector search, anomaly detection,
 pagination, streaming, offline persistence, and production observability.
 
-This document covers work through the **fixture-backed screen milestone**: the
+This document covers work through the **basic UI interaction milestone**: the
 toolchain, module graph, dependency wiring, and quality gates; the
-`:core:designsystem` component set; and the assembled log viewer screen with
-its loading, error, populated, filtered, and filtered-empty states.
+`:core:designsystem` component set; the assembled log viewer screen with its
+loading, error, populated, filtered, and filtered-empty states; and the
+Hilt-backed `LogViewerViewModel` that turns user actions into screen state.
 
-The screen is currently driven by sample fixture state, so its search, sort,
-retry, dismissal, and row-selection callbacks are deliberately inert, and the
-displayed totals describe the supplied dataset rather than the short
-representative row list rendered beneath them. Networking, mapping, the
-ViewModel, and real interaction land in later roadmap milestones.
+The result set is still sample fixture state, so interaction is deliberately
+partial: row selection opens the correct details sheet and every dismissal path
+closes it, while a search query and a sort toggle are recorded in state without
+filtering or reordering the rows, and Retry restores the default fixture rather
+than re-fetching. The displayed totals describe the supplied dataset rather
+than the short representative row list rendered beneath them. Networking,
+mapping, and real search/sort processing land in later roadmap milestones.
 
 ## Prerequisites
 
@@ -52,8 +55,10 @@ checks; it never formats, modifies, or stages files.
 | Apply Kotlin/Gradle formatting | `./gradlew ktlintFormat` |
 | Run Android Lint | `./gradlew lintDebug` |
 | Compile instrumented test sources | `./gradlew :app:compileDebugAndroidTestSources` |
+| Compile log viewer interaction test sources | `./gradlew :feature:logs:compileDebugAndroidTestSources` |
 | Install the debug app on a device/emulator | `./gradlew :app:installDebug` |
 | Run instrumented tests on a device/emulator | `./gradlew :app:connectedDebugAndroidTest` |
+| Run log viewer interaction tests on a device/emulator | `./gradlew :feature:logs:connectedDebugAndroidTest` |
 
 ## Module graph
 
