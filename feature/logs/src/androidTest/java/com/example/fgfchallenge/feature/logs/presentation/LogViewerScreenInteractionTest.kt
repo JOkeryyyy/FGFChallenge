@@ -1,0 +1,173 @@
+package com.example.fgfchallenge.feature.logs.presentation
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
+import androidx.test.espresso.Espresso
+import assertk.assertThat
+import assertk.assertions.containsExactly
+import assertk.assertions.isEmpty
+import assertk.assertions.isEqualTo
+import com.example.fgfchallenge.core.designsystem.theme.FGFChallengeTheme
+import com.example.fgfchallenge.feature.logs.presentation.model.LogSortOrder
+import org.junit.Rule
+import org.junit.Test
+
+/**
+ * Instrumented interaction tests for `LogViewerScreen`, driven by real gestures rather than direct
+ * lambda calls: a tap goes through Compose's pointer pipeline, Back goes through the sheet's own
+ * window, and the swipe goes through `ModalBottomSheet`'s drag/settle behavior.
+ *
+ * These live here rather than in Paparazzi because none of it is a rendering question — a golden
+ * cannot press Back, and `ModalBottomSheet` renders in a separate window a single-window snapshot
+ * never captures.
+ *
+ * The screen is stateless, so each test asserts the action it emitted; whether that action then
+ * clears the selection is `LogViewerViewModelTest`'s subject.
+ *
+ * One gap is deliberate: dismissing the *error dialog* with Back is not covered here. Espresso
+ * cannot deliver the key to the dialog's window under this rule — it times out with
+ * `RootViewWithoutFocusException`, which is why `:core:designsystem`'s `ErrorDialogTest` only
+ * covers the dialog's buttons too. Back on the dialog reaches the same `onDismiss` the Dismiss
+ * button does, and `dismissReportsErrorDismissed` covers that mapping. The sheet's Back path has no
+ * such limitation and is exercised below.
+ */
+class LogViewerScreenInteractionTest {
+    @get:Rule
+    val composeTestRule = createComposeRule()
+
+    private val actions = mutableListOf<LogViewerAction>()
+
+    @Test
+    fun rowTapSelectsThatRow() {
+        setScreen(LogViewerFixtures.allLogsState())
+
+        composeTestRule.onNodeWithText("Connection timed out").performClick()
+
+        assertThat(actions).containsExactly(LogViewerAction.LogSelected("1711-58123"))
+    }
+
+    @Test
+    fun rowTapSelectsTheTappedRowAndNotItsNeighbour() {
+        setScreen(LogViewerFixtures.allLogsState())
+
+        composeTestRule.onNodeWithText("Auth service unreachable").performClick()
+
+        assertThat(actions).containsExactly(LogViewerAction.LogSelected("1711-46204"))
+    }
+
+    @Test
+    fun selectedLogRendersItsDetails() {
+        val row = LogViewerFixtures.firstAllLogsRow()
+        setScreen(LogViewerFixtures.allLogsState().copy(selectedLog = row.details))
+
+        composeTestRule.onNodeWithText("Log Details").assertIsDisplayed()
+        composeTestRule.onNodeWithText(row.details.timestampUtc).assertIsDisplayed()
+        composeTestRule.onNodeWithText(row.details.logId).assertIsDisplayed()
+        composeTestRule.onNodeWithText(row.details.sessionId).assertIsDisplayed()
+        composeTestRule.onNodeWithText(row.details.latency).assertIsDisplayed()
+        assertThat(actions).isEmpty()
+    }
+
+    @Test
+    fun closeButtonDismissesDetails() {
+        setScreenWithSelectedLog()
+
+        composeTestRule.onNodeWithContentDescription("Close").performClick()
+
+        assertThat(actions).containsExactly(LogViewerAction.DetailsDismissed)
+    }
+
+    @Test
+    fun backDismissesDetails() {
+        setScreenWithSelectedLog()
+
+        Espresso.pressBack()
+        composeTestRule.waitForIdle()
+
+        assertThat(actions).containsExactly(LogViewerAction.DetailsDismissed)
+    }
+
+    @Test
+    fun swipeDownDismissesDetails() {
+        setScreenWithSelectedLog()
+
+        // Dragging the sheet's own content settles it to hidden, which is the gesture a user makes;
+        // ModalBottomSheet then reports the same onDismissRequest the close button does.
+        composeTestRule.onNodeWithText("Log Details").performTouchInput { swipeDown() }
+        composeTestRule.waitForIdle()
+
+        assertThat(actions).containsExactly(LogViewerAction.DetailsDismissed)
+    }
+
+    @Test
+    fun retryReportsRetryClicked() {
+        setScreen(LogViewerFixtures.errorState("Unable to load logs", "We couldn't fetch logs from the server."))
+
+        composeTestRule.onNodeWithText("Retry").performClick()
+
+        assertThat(actions).containsExactly(LogViewerAction.RetryClicked)
+    }
+
+    @Test
+    fun dismissReportsErrorDismissed() {
+        setScreen(LogViewerFixtures.errorState("Unable to load logs", "We couldn't fetch logs from the server."))
+
+        composeTestRule.onNodeWithText("Dismiss").performClick()
+
+        assertThat(actions).containsExactly(LogViewerAction.ErrorDismissed)
+    }
+
+    @Test
+    fun typingReportsTheQuery() {
+        setScreen(LogViewerFixtures.allLogsState())
+
+        // performTextInput commits the whole string as one IME edit, so this asserts that the field
+        // reports what was typed, not that it reports once per character.
+        composeTestRule.onNodeWithText("Search message, tag, severity").performTextInput("net")
+
+        assertThat(actions).containsExactly(LogViewerAction.QueryChanged("net"))
+    }
+
+    @Test
+    fun clearingTheSearchFieldReportsAnEmptyQuery() {
+        setScreen(LogViewerFixtures.filteredState())
+
+        composeTestRule.onNodeWithContentDescription("Clear search").performClick()
+
+        assertThat(actions).containsExactly(LogViewerAction.QueryChanged(""))
+    }
+
+    @Test
+    fun sortControlReportsAToggle() {
+        setScreen(LogViewerFixtures.allLogsState())
+
+        composeTestRule.onNodeWithText("Newest first").performClick()
+
+        assertThat(actions).containsExactly(LogViewerAction.SortOrderToggled)
+    }
+
+    @Test
+    fun sortControlShowsTheActiveOrder() {
+        setScreen(LogViewerFixtures.allLogsState().copy(sortOrder = LogSortOrder.OldestFirst))
+
+        composeTestRule.onNodeWithText("Oldest first").assertIsDisplayed()
+    }
+
+    private fun setScreenWithSelectedLog() {
+        setScreen(LogViewerFixtures.allLogsState().copy(selectedLog = LogViewerFixtures.firstAllLogsRow().details))
+    }
+
+    private fun setScreen(state: LogViewerUiState) {
+        composeTestRule.setContent {
+            FGFChallengeTheme {
+                LogViewerScreen(state = state, onAction = { actions += it })
+            }
+        }
+    }
+}

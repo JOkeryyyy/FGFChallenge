@@ -39,4 +39,5 @@ jobs:
             :app:assembleDebug \
             :app:compileDebugAndroidTestSources \
             :core:designsystem:compileDebugAndroidTestSources \
+            :feature:logs:compileDebugAndroidTestSources \
             --stacktrace

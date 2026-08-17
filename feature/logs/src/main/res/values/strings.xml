@@ -8,6 +8,7 @@
         <item quantity="other">%1$s results</item>
     </plurals>
     <string name="log_viewer_sort_newest_first">Newest first</string>
+    <string name="log_viewer_sort_oldest_first">Oldest first</string>
     <string name="log_viewer_sort_action">Change sort order</string>
 
     <!-- Severity summary card -->

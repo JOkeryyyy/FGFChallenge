@@ -1,6 +1,7 @@
 package com.example.fgfchallenge.feature.logs.presentation.model
 
 import androidx.compose.runtime.Immutable
+import com.example.fgfchallenge.core.designsystem.model.LogDetailsUi
 
 /**
  * One entry of the flattened grouped list rendered by the single `LazyColumn`.
@@ -29,11 +30,18 @@ internal sealed interface LogViewerListItem {
         }
     }
 
-    /** One log entry inside the preceding [MinuteHeader]'s minute. */
+    /**
+     * One log entry inside the preceding [MinuteHeader]'s minute.
+     *
+     * [details] is the same entry rendered for the details sheet. Carrying it on the item makes
+     * selection a lookup in the already-materialized list instead of a second data source, so
+     * `details.logId` always equals `row.id`.
+     */
     @Immutable
     data class LogRow(
         override val stableKey: String,
         val row: LogRowUi,
+        val details: LogDetailsUi,
     ) : LogViewerListItem {
         override val contentType: String = CONTENT_TYPE
 

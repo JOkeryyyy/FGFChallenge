@@ -2,30 +2,39 @@ package com.example.fgfchallenge.feature.logs
 
 import android.content.res.Configuration
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.fgfchallenge.core.designsystem.theme.FGFChallengeTheme
 import com.example.fgfchallenge.feature.logs.presentation.LogViewerFixture
 import com.example.fgfchallenge.feature.logs.presentation.LogViewerScreen
+import com.example.fgfchallenge.feature.logs.presentation.LogViewerViewModel
 import com.example.fgfchallenge.feature.logs.presentation.logViewerFixtureState
 
 /**
  * The log viewer's only public entry point, composed by `:app`.
  *
- * This milestone mounts the populated fixture with no-op callbacks: the screen, its states, and its
- * layout are complete, while query, sort, retry, dismissal, and row selection start doing real work
- * in Roadmap #4, when the ViewModel replaces the fixture. The alternate states are reachable
- * through this file's previews rather than an in-app selector.
+ * This is the feature's root composable: it owns the ViewModel, collects its state with lifecycle
+ * awareness, and hands `LogViewerScreen` nothing but state and one action callback, which is what
+ * keeps the screen previewable and directly testable.
+ *
+ * The ViewModel is resolved through `viewModel()` rather than `hiltViewModel()` because `:app`'s
+ * host activity is `@AndroidEntryPoint`, so its default factory already is Hilt's — this avoids
+ * pulling in `hilt-navigation-compose` for a prototype that has no navigation graph.
+ *
+ * The result set is still fixture-backed, so query text and sort order are recorded without
+ * changing rows; the alternate screen states remain reachable through this file's previews rather
+ * than an in-app selector.
  */
 @Composable
 fun LogsFeature(modifier: Modifier = Modifier) {
+    val viewModel = viewModel<LogViewerViewModel>()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     LogViewerScreen(
-        state = logViewerFixtureState(LogViewerFixture.AllLogs),
-        onQueryChange = {},
-        onSortToggle = {},
-        onRetry = {},
-        onErrorDismiss = {},
-        onRowClick = {},
+        state = state,
+        onAction = viewModel::onAction,
         modifier = modifier,
     )
 }
@@ -38,11 +47,7 @@ private fun LogViewerFixturePreview(
     FGFChallengeTheme(darkTheme = darkTheme) {
         LogViewerScreen(
             state = logViewerFixtureState(fixture),
-            onQueryChange = {},
-            onSortToggle = {},
-            onRetry = {},
-            onErrorDismiss = {},
-            onRowClick = {},
+            onAction = {},
         )
     }
 }
