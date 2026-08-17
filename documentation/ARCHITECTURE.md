@@ -318,7 +318,7 @@ The details sheet displays severity, complete message, tag, full UTC timestamp, 
 
 The Canvas severity indicator uses a neutral circular track plus separate ERROR and FATAL arcs. Their combined sweep represents error density; the center displays the combined percentage, and an adjacent legend presents severity counts. Text labels ensure that meaning is not conveyed by color alone.
 
-Accessibility includes localized descriptions, minimum touch targets, heading semantics for minute groups, an announced sort state, explicit Canvas semantics, and support for close, swipe-down, and Back dismissal of the details sheet.
+The details sheet supports close, swipe-down, and Back dismissal.
 
 ## Time and formatting
 
@@ -348,7 +348,7 @@ The architecture supports four complementary test levels:
 1. Pure JVM tests for presentation processing utilities: search, grouping, sorting, deterministic ties, severity counts, density, and UTC boundary behavior.
 2. MockWebServer integration tests for the real Retrofit/Kotlinx Serialization/repository path and typed failure mapping.
 3. ViewModel JVM tests for loading, success, error/retry, search state, processed results, sorting, selection, and dismissal.
-4. Paparazzi visual tests for design-system components and assembled screen states, plus a small instrumented Compose semantics/accessibility suite for major interactions.
+4. Paparazzi visual tests for design-system components and assembled screen states, plus a small instrumented Compose test suite for major interactions.
 
 Fakes are preferred over mocking frameworks. JUnit 4 is used consistently with AndroidJUnitRunner and Compose rules, with AssertK, Turbine, and `kotlinx-coroutines-test` for local tests.
 

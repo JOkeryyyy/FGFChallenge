@@ -17,7 +17,9 @@ Build the app as a sequence of usable increments: establish the project foundati
 2. **Design system and UI components**
    - Define deterministic light/dark colors, typography, shapes, spacing, and severity styling.
    - Implement stateless reusable components for log rows, minute headers, badges, search, loading, errors, empty results, and the Canvas severity indicator.
-   - Add representative previews and basic accessibility semantics while each component is isolated.
+   - Add representative previews while each component is isolated.
+   - Plan the layout of each component. For example, LogRow is a row layout with two badges, an information text, and a second+ms timestamp. 
+   - Consider responsive design also. UI does not need to be perfect under any font size or screen size, the goal is simply stay organized 
 
 3. **Fixture-backed screen UI**
    - Assemble the full screen from realistic sample UI state before networking is introduced.
@@ -57,7 +59,7 @@ Build the app as a sequence of usable increments: establish the project foundati
 
 9. **Test completion and release verification**
    - Develop focused tests alongside networking, mapping, processing, and ViewModel work, then complete the broader suite in this milestone.
-   - Run JVM processing and ViewModel tests, MockWebServer repository tests, Paparazzi visual tests, and targeted Compose interaction/accessibility tests.
+   - Run JVM processing and ViewModel tests, MockWebServer repository tests, Paparazzi visual tests, and targeted Compose interaction tests.
    - Execute lint, ktlint, application assembly, and instrumented-test compilation in CI; run the critical Compose flows on a local device or emulator.
    - Verify the pre-commit hook both passes clean code and blocks an intentional violation.
    - Complete `README.md`, `PROMPTS.md`, screenshots or recording, performance notes, and final delivery checks.

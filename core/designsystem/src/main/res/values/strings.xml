@@ -1,0 +1,29 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- LogSearchField -->
+    <string name="log_search_field_placeholder">Search message, tag, severity</string>
+    <string name="log_search_field_clear_action">Clear search</string>
+
+    <!-- SeverityIndicator -->
+    <!-- "percent" does not inflect in English, so a <plurals> resource adds no value here. -->
+    <string name="severity_indicator_description" tools:ignore="PluralsCandidate">Error density %1$d percent</string>
+    <string name="severity_indicator_legend_item">%1$s %2$d</string>
+
+    <!-- LoadingContent -->
+    <string name="loading_content_description">Loading logs</string>
+
+    <!-- ErrorDialog -->
+    <string name="error_dialog_retry_action">Retry</string>
+    <string name="error_dialog_dismiss_action">Dismiss</string>
+
+    <!-- LogDetailsSheet -->
+    <string name="log_details_sheet_title">Log Details</string>
+    <string name="log_details_close_action">Close</string>
+    <string name="log_details_label_severity">Severity</string>
+    <string name="log_details_label_message">Message</string>
+    <string name="log_details_label_tag">Tag</string>
+    <string name="log_details_label_timestamp">Timestamp</string>
+    <string name="log_details_label_latency">Latency</string>
+    <string name="log_details_label_ai_generated">AI Generated</string>
+    <string name="log_details_label_log_id">Log ID</string>
+    <string name="log_details_label_session">Session</string>
+</resources>
