@@ -5,10 +5,11 @@ import assertk.assertions.containsExactly
 import assertk.assertions.hasSize
 import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
+import assertk.assertions.isFalse
 import assertk.assertions.isNotEmpty
 import assertk.assertions.isNotEqualTo
 import assertk.assertions.isNull
-import assertk.assertions.matchesPredicate
+import assertk.assertions.isTrue
 import assertk.assertions.startsWith
 import com.example.fgfchallenge.core.designsystem.model.SeverityBadgeTone
 import com.example.fgfchallenge.core.designsystem.model.SeverityLegendItem
@@ -21,13 +22,13 @@ import org.junit.Test
 private typealias MinuteGroup = Pair<LogViewerListItem.MinuteHeader, List<LogViewerListItem.LogRow>>
 
 /**
- * Contract tests for the fixture states that back the screen, the previews, the goldens, and the
- * ViewModel until networking and processing land.
+ * Contract tests for the fixture states and rows that back the previews and the goldens.
  *
  * They pin the values the wireframe and the dataset analysis state — summary counts, the derived
- * error density, flat-list key uniqueness and namespacing, per-group header counts, zero-result
- * behavior, and the row/details identity that makes selection-by-ID sound — so a later edit to the
- * fixtures cannot silently change what any of those consumers claim.
+ * error density, flat-list key uniqueness and namespacing, the minute grouping, and the shape of
+ * each screen state — so a later edit to the fixtures cannot silently change what any of those
+ * consumers claim. What the fixtures *derive* rather than declare is covered next door in
+ * `LogEntryUiMapperTest`, against the same production mapping they run through.
  */
 class LogViewerFixturesTest {
     @Test
@@ -100,8 +101,8 @@ class LogViewerFixturesTest {
 
     @Test
     fun `every flat list key is unique`() {
-        contentFixtures().forEach { content ->
-            val keys = content.items.map { it.stableKey }
+        itemFixtures().forEach { items ->
+            val keys = items.map { it.stableKey }
 
             assertThat(keys).isNotEmpty()
             assertThat(keys.distinct()).hasSize(keys.size)
@@ -110,8 +111,8 @@ class LogViewerFixturesTest {
 
     @Test
     fun `keys are namespaced by item type`() {
-        contentFixtures().forEach { content ->
-            content.items.forEach { item ->
+        itemFixtures().forEach { items ->
+            items.forEach { item ->
                 when (item) {
                     is LogViewerListItem.MinuteHeader -> assertThat(item.stableKey).startsWith("minute:")
                     is LogViewerListItem.LogRow -> assertThat(item.stableKey).isEqualTo("log:${item.row.id}")
@@ -122,7 +123,7 @@ class LogViewerFixturesTest {
 
     @Test
     fun `minute header keys carry the full UTC minute identity`() {
-        val headers = LogViewerFixtures.allLogsState().content().minuteGroups()
+        val headers = LogViewerFixtures.allLogsItems.minuteGroups()
 
         assertThat(headers.map { (header, _) -> header.stableKey }).containsExactly(
             "minute:2025-05-22T17:11Z",
@@ -133,7 +134,7 @@ class LogViewerFixturesTest {
 
     @Test
     fun `headers and rows expose distinct content types`() {
-        val items = LogViewerFixtures.allLogsState().content().items
+        val items = LogViewerFixtures.allLogsItems
         val headerTypes = items.filterIsInstance<LogViewerListItem.MinuteHeader>().map { it.contentType }
         val rowTypes = items.filterIsInstance<LogViewerListItem.LogRow>().map { it.contentType }
 
@@ -143,23 +144,22 @@ class LogViewerFixturesTest {
     }
 
     @Test
-    fun `each minute header counts the rows that follow it`() {
-        contentFixtures().forEach { content ->
-            val groups = content.minuteGroups()
+    fun `all logs content reproduces the wireframe minute groups`() {
+        val groups = LogViewerFixtures.allLogsItems.minuteGroups()
 
-            assertThat(groups).isNotEmpty()
-            groups.forEach { (header, rows) ->
-                assertThat(header.itemCount).isEqualTo(rows.size)
-            }
-        }
+        assertThat(groups.map { (header, _) -> header.minute }).containsExactly("17:11", "17:10", "17:09")
+        assertThat(groups.map { (_, rows) -> rows.size }).containsExactly(5, 5, 1)
     }
 
     @Test
-    fun `all logs content reproduces the wireframe minute groups`() {
-        val groups = LogViewerFixtures.allLogsState().content().minuteGroups()
-
-        assertThat(groups.map { (header, _) -> header.minute }).containsExactly("17:11", "17:10", "17:09")
-        assertThat(groups.map { (header, _) -> header.itemCount }).containsExactly(5, 5, 1)
+    fun `every row sits under the header for its own minute`() {
+        itemFixtures().forEach { items ->
+            items.minuteGroups().forEach { (header, rows) ->
+                rows.forEach { row ->
+                    assertThat(row.utcMinuteId).isEqualTo(header.utcMinuteId)
+                }
+            }
+        }
     }
 
     @Test
@@ -169,9 +169,9 @@ class LogViewerFixturesTest {
         assertThat(state.query).isEqualTo("")
         assertThat(state.sortOrder).isEqualTo(LogSortOrder.NewestFirst)
         assertThat(state.selectedLog).isNull()
-        assertThat(state.content().resultCount).isEqualTo(LogViewerFixtures.ALL_LOGS_RESULT_COUNT)
+        assertThat(state.refresh).isEqualTo(LogViewerRefreshState.Complete)
+        assertThat(state.summary).isEqualTo(LogViewerSummaryState.Ready(LogViewerFixtures.allLogsSummary))
         assertThat(LogViewerFixtures.ALL_LOGS_RESULT_COUNT).isEqualTo(5_000)
-        assertThat(state.content().severitySummary).isEqualTo(LogViewerFixtures.allLogsSummary)
     }
 
     @Test
@@ -179,103 +179,62 @@ class LogViewerFixturesTest {
         val state = LogViewerFixtures.filteredState()
 
         assertThat(state.query).isEqualTo(LogViewerFixtures.FILTERED_QUERY)
-        assertThat(state.content().resultCount).isEqualTo(718)
+        assertThat(state.summary).isEqualTo(LogViewerSummaryState.Ready(LogViewerFixtures.filteredSummary))
         assertThat(LogViewerFixtures.FILTERED_RESULT_COUNT).isEqualTo(718)
-        assertThat(state.content().items.filterIsInstance<LogViewerListItem.LogRow>()).hasSize(7)
-        assertThat(state.content().severitySummary).isEqualTo(LogViewerFixtures.filteredSummary)
+        assertThat(LogViewerFixtures.filteredItems.filterIsInstance<LogViewerListItem.LogRow>()).hasSize(7)
     }
 
     @Test
-    fun `filtered empty state keeps the query and renders no list items`() {
+    fun `filtered empty state keeps the query and counts zero matches`() {
         val state = LogViewerFixtures.filteredEmptyState()
 
         assertThat(state.query).isEqualTo(LogViewerFixtures.NONMATCHING_QUERY)
         assertThat(state.query).isNotEmpty()
-        assertThat(state.content().resultCount).isEqualTo(0)
-        assertThat(state.content().items).isEmpty()
-        assertThat(state.content().severitySummary).isEqualTo(LogViewerFixtures.filteredEmptySummary)
+        assertThat(state.summary).isEqualTo(LogViewerSummaryState.Ready(LogViewerFixtures.filteredEmptySummary))
+        // Counted zero, not merely uncounted: this is the condition the no-results state waits for.
+        assertThat(state.hasNoMatches).isTrue()
     }
 
     @Test
-    fun `error and loading states carry no content`() {
-        assertThat(LogViewerFixtures.loadingState.loadState).isEqualTo(LogViewerLoadState.Loading)
-        assertThat(LogViewerFixtures.errorState("Unable to load logs", "Try again.").loadState)
-            .isEqualTo(LogViewerLoadState.Error("Unable to load logs", "Try again."))
+    fun `loading and error states report no counted summary`() {
+        assertThat(LogViewerFixtures.loadingState.refresh).isEqualTo(LogViewerRefreshState.InProgress)
+        assertThat(LogViewerFixtures.loadingState.summary).isEqualTo(LogViewerSummaryState.Pending)
+        assertThat(LogViewerFixtures.loadingState.hasNoMatches).isFalse()
+
+        val errorState = LogViewerFixtures.errorState()
+        assertThat(errorState.refresh).isEqualTo(LogViewerRefreshState.Failed(dismissed = false))
+        assertThat(errorState.showsRefreshFailure).isTrue()
+        assertThat(errorState.showsStaleSnapshotNotice).isFalse()
     }
 
     @Test
-    fun `every row's details identify that same row`() {
-        contentFixtures().forEach { content ->
-            content.logRows().forEach { item ->
-                // Selection resolves details by row ID, so this identity is what makes the
-                // ViewModel's lookup — and therefore the sheet's contents — correct.
-                assertThat(item.details.logId).isEqualTo(item.row.id)
-                assertThat(item.details.message).isEqualTo(item.row.message)
-                assertThat(item.details.tag).isEqualTo(item.row.tagLabel)
-                assertThat(item.details.severityLabel).isEqualTo(item.row.severityLabel)
-                assertThat(item.details.severityTone).isEqualTo(item.row.severityTone)
-            }
-        }
+    fun `a dismissed failure keeps the failure and swaps the dialog for the stale notice`() {
+        val stale = LogViewerFixtures.staleSnapshotState()
+
+        assertThat(stale.refresh).isEqualTo(LogViewerRefreshState.Failed(dismissed = true))
+        assertThat(stale.showsRefreshFailure).isFalse()
+        assertThat(stale.showsStaleSnapshotNotice).isTrue()
+        // The retained snapshot is still queryable underneath, which is what the notice qualifies.
+        assertThat(stale.summary).isEqualTo(LogViewerSummaryState.Ready(LogViewerFixtures.allLogsSummary))
     }
 
     @Test
-    fun `every row's details timestamp combines its minute header and row time`() {
-        contentFixtures().forEach { content ->
-            content.minuteGroups().forEach { (header, rows) ->
-                rows.forEach { item ->
-                    // "minute:2025-05-22T17:11Z" + "58.123" -> "2025-05-22T17:11:58.123Z".
-                    val utcMinuteId = header.stableKey.removePrefix("minute:").removeSuffix("Z")
+    fun `the first all-logs entry helper returns the entry the first row renders`() {
+        val firstRow = LogViewerFixtures.allLogsItems.filterIsInstance<LogViewerListItem.LogRow>().first()
 
-                    assertThat(item.details.timestampUtc).isEqualTo("$utcMinuteId:${item.row.time}Z")
-                    assertThat(item.details.timestampUtc).matchesPredicate {
-                        it.matches(Regex("""\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z"""))
-                    }
-                }
-            }
-        }
+        assertThat(LogViewerFixtures.firstAllLogsEntry().id).isEqualTo(firstRow.row.id)
+        assertThat(LogViewerFixtures.firstAllLogsDetails().logId).isEqualTo(firstRow.row.id)
     }
 
-    @Test
-    fun `every row's details report the one response-level session`() {
-        contentFixtures().forEach { content ->
-            content.logRows().forEach { item ->
-                assertThat(item.details.sessionId).isEqualTo(LogViewerFixtures.SESSION_ID)
-            }
-        }
-    }
-
-    @Test
-    fun `every row's details format latency in grouped milliseconds and a yes or no AI flag`() {
-        contentFixtures().forEach { content ->
-            content.logRows().forEach { item ->
-                assertThat(item.details.latency).matchesPredicate {
-                    it.matches(Regex("""\d{1,3}(,\d{3})* ms"""))
-                }
-                assertThat(item.details.aiGenerated).matchesPredicate { it == "Yes" || it == "No" }
-            }
-        }
-    }
-
-    @Test
-    fun `the first all-logs row helper returns the first row the list renders`() {
-        val content = LogViewerFixtures.allLogsState().content()
-
-        assertThat(LogViewerFixtures.firstAllLogsRow()).isEqualTo(content.logRows().first())
-    }
-
-    private fun contentFixtures(): List<LogViewerLoadState.Content> =
+    private fun itemFixtures(): List<List<LogViewerListItem>> =
         listOf(
-            LogViewerFixtures.allLogsState().content(),
-            LogViewerFixtures.filteredState().content(),
+            LogViewerFixtures.allLogsItems,
+            LogViewerFixtures.filteredItems,
         )
 
-    private fun LogViewerUiState.content(): LogViewerLoadState.Content = loadState as LogViewerLoadState.Content
-
-    private fun LogViewerLoadState.Content.logRows(): List<LogViewerListItem.LogRow> = items.filterIsInstance<LogViewerListItem.LogRow>()
-
-    private fun LogViewerLoadState.Content.minuteGroups(): List<MinuteGroup> {
+    private fun List<LogViewerListItem>.minuteGroups(): List<MinuteGroup> {
         val groups = mutableListOf<Pair<LogViewerListItem.MinuteHeader, MutableList<LogViewerListItem.LogRow>>>()
-        items.forEach { item ->
+        forEach { item ->
             when (item) {
                 is LogViewerListItem.MinuteHeader -> groups += item to mutableListOf()
                 is LogViewerListItem.LogRow -> groups.last().second += item

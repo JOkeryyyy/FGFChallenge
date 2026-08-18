@@ -4,18 +4,24 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import com.example.fgfchallenge.core.designsystem.model.LogDetailsUi
+import androidx.paging.insertSeparators
+import androidx.paging.map
+import com.example.fgfchallenge.feature.logs.data.error.Result
 import com.example.fgfchallenge.feature.logs.data.model.LogEntry
 import com.example.fgfchallenge.feature.logs.data.model.LogQuery
 import com.example.fgfchallenge.feature.logs.data.repository.LogsRepository
 import com.example.fgfchallenge.feature.logs.presentation.model.LogFilterSelection
 import com.example.fgfchallenge.feature.logs.presentation.model.LogViewerListItem
+import com.example.fgfchallenge.feature.logs.presentation.model.minuteHeaderBetween
+import com.example.fgfchallenge.feature.logs.presentation.model.toListItem
+import com.example.fgfchallenge.feature.logs.presentation.model.toLogDetailsUi
 import com.example.fgfchallenge.feature.logs.presentation.model.toSeveritySummaryUi
 import com.example.fgfchallenge.feature.logs.presentation.model.toggleSeverity
 import com.example.fgfchallenge.feature.logs.presentation.model.toggleTag
 import com.example.fgfchallenge.feature.logs.presentation.model.utcDateOf
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,17 +48,14 @@ import javax.inject.Inject
  *
  * Two streams leave this class rather than one, and that is deliberate. [state] holds only bounded
  * screen state; [pagedLogs] carries the rows, because Paging owns and evicts its own working set
- * and putting `PagingData` in an immutable state value would defeat that.
+ * and putting `PagingData` in an immutable state value would defeat that. Nothing here is sized by
+ * the snapshot or by the number of matches — not the state, not the details lookup, not the
+ * transformation that groups rows into minutes.
  *
  * It also owns the filter sheet's *draft*, not just the applied filters. The sheet is a stateless
  * design-system component that reports chip taps and picker results and re-renders whatever it is
  * handed back, so a half-composed filter set lives in one place, survives configuration changes with
  * the rest of the state, and reaches the query only when Apply says so.
- *
- * The result *list* is still the Roadmap #3 fixture: [pagedLogs] and [LogViewerUiState.summary] are
- * live repository reads, but nothing renders them until Roadmap #10 replaces the fixture content
- * and maps entries into display-ready list items. Roadmap #10 also owns startup refresh, so no
- * launch refresh is triggered here yet.
  */
 @HiltViewModel
 internal class LogViewerViewModel
@@ -60,7 +63,7 @@ internal class LogViewerViewModel
     constructor(
         private val repository: LogsRepository,
     ) : ViewModel() {
-        private val _state = MutableStateFlow(defaultState())
+        private val _state = MutableStateFlow(LogViewerUiState())
 
         val state: StateFlow<LogViewerUiState> = _state.asStateFlow()
 
@@ -78,22 +81,42 @@ internal class LogViewerViewModel
                 .distinctUntilChanged()
 
         /**
-         * The rows for the active query.
+         * The list, as display-ready items grouped under UTC minute headers.
          *
          * `flatMapLatest` is the latest-generation mechanism: a new query cancels the previous
          * Pager's collection, so rows from an obsolete query can never arrive after the criteria
-         * change. `cachedIn` keeps the loaded pages across configuration changes and makes the
-         * stream shareable, which a `PagingData` flow otherwise is not.
+         * change.
+         *
+         * Both transformations run *before* `cachedIn`, which is what keeps them off the recomposing
+         * thread and stops them from re-running for every collector: a row is formatted once, when
+         * its page loads. `cachedIn` also keeps the loaded pages across configuration changes and
+         * makes the stream shareable, which a `PagingData` flow otherwise is not.
          */
         @OptIn(ExperimentalCoroutinesApi::class)
-        val pagedLogs: Flow<PagingData<LogEntry>> =
+        val pagedLogs: Flow<PagingData<LogViewerListItem>> =
             activeQuery
                 .flatMapLatest { query -> repository.pagedLogs(query) }
-                .cachedIn(viewModelScope)
+                .map { pagingData ->
+                    pagingData
+                        .map(LogEntry::toListItem)
+                        .insertSeparators(generator = ::minuteHeaderBetween)
+                }.cachedIn(viewModelScope)
+
+        /** Cancelled and replaced by a retry, so two refreshes can never resolve out of order. */
+        private var refreshJob: Job? = null
+
+        /**
+         * Cancelled by the next selection and by dismissal, so a lookup that is still in flight
+         * cannot open a sheet for a row the user has moved on from — or reopen one they just closed.
+         */
+        private var selectionJob: Job? = null
 
         init {
             observeSummary()
             observeFilterOptions()
+            // One complete refresh per launch. The ViewModel outlives configuration changes, so
+            // this runs once for the screen rather than once per composition.
+            refreshSnapshot()
         }
 
         fun onAction(action: LogViewerAction) {
@@ -114,6 +137,7 @@ internal class LogViewerViewModel
                 }
 
                 LogViewerAction.DetailsDismissed -> {
+                    selectionJob?.cancel()
                     _state.update { it.copy(selectedLog = null) }
                 }
 
@@ -186,20 +210,66 @@ internal class LogViewerViewModel
                     updateFilterDraft { LogFilterSelection() }
                 }
 
-                // Both paths leave the error behind, and the fixture is the only result set this
-                // milestone can return to. Roadmap #10 replaces this with a startup refresh, where
-                // Retry and Dismiss stop being equivalent. The summary is carried in from the
-                // current state because it belongs to the active query, not to the fixture content
-                // — and is then dropped by `updateQueryInputs` if resetting changed the query. The
-                // filter options come across for a different reason: they describe the stored
-                // snapshot rather than anything the user typed, so recovering the screen must not
-                // empty the sheet's controls until Room next emits.
-                LogViewerAction.RetryClicked, LogViewerAction.ErrorDismissed -> {
-                    updateQueryInputs {
-                        defaultState().copy(summary = it.summary, filterOptions = it.filterOptions)
+                // Retry re-runs the launch refresh, and only that. The query, filters, and sort are
+                // the user's and survive it — a failed import says nothing about what they asked
+                // for, and resetting their inputs would lose work the failure never invalidated.
+                LogViewerAction.RetryClicked -> {
+                    refreshSnapshot()
+                }
+
+                // Dismissing closes the modal without claiming the snapshot is current: the failure
+                // stands, and what stays readable underneath is the previous snapshot Room kept.
+                LogViewerAction.ErrorDismissed -> {
+                    _state.update { current ->
+                        if (current.refresh is LogViewerRefreshState.Failed) {
+                            current.copy(refresh = LogViewerRefreshState.Failed(dismissed = true))
+                        } else {
+                            current
+                        }
                     }
                 }
             }
+        }
+
+        /**
+         * Fetches the complete remote snapshot and replaces the stored one.
+         *
+         * The three outcomes are the three states, with nothing in between: while it runs the screen
+         * shows skeletons instead of a snapshot that may be about to be replaced, and a failure is
+         * reported as exactly that rather than as content. The repository has already guaranteed the
+         * previous snapshot survives a failure, so nothing here has to undo anything.
+         */
+        private fun refreshSnapshot() {
+            refreshJob?.cancel()
+            refreshJob =
+                viewModelScope.launch {
+                    _state.update { it.copy(refresh = LogViewerRefreshState.InProgress) }
+                    val refreshState =
+                        when (repository.refreshSnapshot()) {
+                            is Result.Success -> LogViewerRefreshState.Complete
+                            is Result.Error -> LogViewerRefreshState.Failed()
+                        }
+                    _state.update { it.copy(refresh = refreshState) }
+                }
+        }
+
+        /**
+         * Resolves the tapped row's details from the repository by ID.
+         *
+         * By ID rather than by scanning what the list currently holds: Paging evicts pages as the
+         * user scrolls, so a row that is on screen is not necessarily a row whose data is still in
+         * memory, and a lookup that depended on that would fail exactly where the paged list is
+         * doing its job. An ID the snapshot no longer holds, or a failed read, leaves the current
+         * selection untouched — a stale tap arriving after the list changed must not dismiss a
+         * sheet the user is reading.
+         */
+        private fun selectLog(logId: String) {
+            selectionJob?.cancel()
+            selectionJob =
+                viewModelScope.launch {
+                    val entry = (repository.logById(logId) as? Result.Success)?.data ?: return@launch
+                    _state.update { it.copy(selectedLog = entry.toLogDetailsUi()) }
+                }
         }
 
         /**
@@ -224,9 +294,9 @@ internal class LogViewerViewModel
          *
          * Doing it here rather than when the new aggregate is subscribed to is what makes the
          * guarantee structural: no published [LogViewerUiState] ever pairs new criteria with a
-         * total counted for the old ones, not even for the frame between the two writes. Routing
-         * every query input through this function is also what keeps the rule from having to be
-         * remembered again for each filter control Roadmap #11 adds.
+         * total counted for the old ones, not even for the frame between the two writes. That
+         * matters more than it sounds, because the paged rows change generation at the same moment
+         * — a summary left standing would be describing a list that no longer exists.
          */
         private fun updateQueryInputs(transform: (LogViewerUiState) -> LogViewerUiState) {
             _state.update { current ->
@@ -278,30 +348,5 @@ internal class LogViewerViewModel
                     updateQueryInputs { it.copy(filterOptions = options) }
                 }
             }
-        }
-
-        /**
-         * A selection for an ID that is not in the current result set is ignored rather than
-         * clearing the sheet, so a stale tap arriving after the list changed cannot dismiss a sheet
-         * the user is reading.
-         *
-         * Roadmap #10 replaces this scan of the fixture with `LogsRepository.logById`, so a row on
-         * a page Paging has since evicted stays selectable.
-         */
-        private fun selectLog(logId: String) {
-            val details = _state.value.detailsFor(logId) ?: return
-            _state.update { it.copy(selectedLog = details) }
-        }
-
-        private companion object {
-            /** Blank query, no filters, newest first, nothing selected, and the fixture result set. */
-            fun defaultState(): LogViewerUiState = LogViewerFixtures.allLogsState()
-
-            fun LogViewerUiState.detailsFor(logId: String): LogDetailsUi? =
-                (loadState as? LogViewerLoadState.Content)
-                    ?.items
-                    ?.filterIsInstance<LogViewerListItem.LogRow>()
-                    ?.firstOrNull { it.row.id == logId }
-                    ?.details
         }
     }

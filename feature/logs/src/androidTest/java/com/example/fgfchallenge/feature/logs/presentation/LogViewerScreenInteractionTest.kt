@@ -28,7 +28,8 @@ import org.junit.Test
  * never captures.
  *
  * The screen is stateless, so each test asserts the action it emitted; whether that action then
- * clears the selection is `LogViewerViewModelTest`'s subject.
+ * clears the selection is `LogViewerViewModelTest`'s subject. Both of the screen's inputs come from
+ * one fixture, so a tapped row is a row the paged stream actually produced.
  *
  * One gap is deliberate: dismissing the *error dialog* with Back is not covered here. Espresso
  * cannot deliver the key to the dialog's window under this rule — it times out with
@@ -45,7 +46,7 @@ class LogViewerScreenInteractionTest {
 
     @Test
     fun rowTapSelectsThatRow() {
-        setScreen(LogViewerFixtures.allLogsState())
+        setScreen(LogViewerFixture.AllLogs)
 
         composeTestRule.onNodeWithText("Connection timed out").performClick()
 
@@ -54,7 +55,7 @@ class LogViewerScreenInteractionTest {
 
     @Test
     fun rowTapSelectsTheTappedRowAndNotItsNeighbour() {
-        setScreen(LogViewerFixtures.allLogsState())
+        setScreen(LogViewerFixture.AllLogs)
 
         composeTestRule.onNodeWithText("Auth service unreachable").performClick()
 
@@ -63,14 +64,14 @@ class LogViewerScreenInteractionTest {
 
     @Test
     fun selectedLogRendersItsDetails() {
-        val row = LogViewerFixtures.firstAllLogsRow()
-        setScreen(LogViewerFixtures.allLogsState().copy(selectedLog = row.details))
+        val details = LogViewerFixtures.firstAllLogsDetails()
+        setScreen(LogViewerFixture.AllLogs, state = LogViewerFixtures.allLogsState().copy(selectedLog = details))
 
         composeTestRule.onNodeWithText("Log Details").assertIsDisplayed()
-        composeTestRule.onNodeWithText(row.details.timestampUtc).assertIsDisplayed()
-        composeTestRule.onNodeWithText(row.details.logId).assertIsDisplayed()
-        composeTestRule.onNodeWithText(row.details.sessionId).assertIsDisplayed()
-        composeTestRule.onNodeWithText(row.details.latency).assertIsDisplayed()
+        composeTestRule.onNodeWithText(details.timestampUtc).assertIsDisplayed()
+        composeTestRule.onNodeWithText(details.logId).assertIsDisplayed()
+        composeTestRule.onNodeWithText(details.sessionId).assertIsDisplayed()
+        composeTestRule.onNodeWithText(details.latency).assertIsDisplayed()
         assertThat(actions).isEmpty()
     }
 
@@ -107,7 +108,7 @@ class LogViewerScreenInteractionTest {
 
     @Test
     fun retryReportsRetryClicked() {
-        setScreen(LogViewerFixtures.errorState("Unable to load logs", "We couldn't fetch logs from the server."))
+        setScreen(LogViewerFixture.Error)
 
         composeTestRule.onNodeWithText("Retry").performClick()
 
@@ -116,7 +117,7 @@ class LogViewerScreenInteractionTest {
 
     @Test
     fun dismissReportsErrorDismissed() {
-        setScreen(LogViewerFixtures.errorState("Unable to load logs", "We couldn't fetch logs from the server."))
+        setScreen(LogViewerFixture.Error)
 
         composeTestRule.onNodeWithText("Dismiss").performClick()
 
@@ -125,7 +126,7 @@ class LogViewerScreenInteractionTest {
 
     @Test
     fun typingReportsTheQuery() {
-        setScreen(LogViewerFixtures.allLogsState())
+        setScreen(LogViewerFixture.AllLogs)
 
         // performTextInput commits the whole string as one IME edit, so this asserts that the field
         // reports what was typed, not that it reports once per character.
@@ -136,7 +137,7 @@ class LogViewerScreenInteractionTest {
 
     @Test
     fun clearingTheSearchFieldReportsAnEmptyQuery() {
-        setScreen(LogViewerFixtures.filteredState())
+        setScreen(LogViewerFixture.Filtered)
 
         composeTestRule.onNodeWithContentDescription("Clear search").performClick()
 
@@ -145,7 +146,7 @@ class LogViewerScreenInteractionTest {
 
     @Test
     fun sortControlReportsAToggle() {
-        setScreen(LogViewerFixtures.allLogsState())
+        setScreen(LogViewerFixture.AllLogs)
 
         composeTestRule.onNodeWithText("Newest first").performClick()
 
@@ -154,19 +155,37 @@ class LogViewerScreenInteractionTest {
 
     @Test
     fun sortControlShowsTheActiveOrder() {
-        setScreen(LogViewerFixtures.allLogsState().copy(sortOrder = LogSortOrder.OldestFirst))
+        setScreen(
+            LogViewerFixture.AllLogs,
+            state = LogViewerFixtures.allLogsState().copy(sortOrder = LogSortOrder.OldestFirst),
+        )
 
         composeTestRule.onNodeWithText("Oldest first").assertIsDisplayed()
     }
 
     private fun setScreenWithSelectedLog() {
-        setScreen(LogViewerFixtures.allLogsState().copy(selectedLog = LogViewerFixtures.firstAllLogsRow().details))
+        setScreen(
+            LogViewerFixture.AllLogs,
+            state = LogViewerFixtures.allLogsState().copy(selectedLog = LogViewerFixtures.firstAllLogsDetails()),
+        )
     }
 
-    private fun setScreen(state: LogViewerUiState) {
+    /**
+     * The fixture supplies both inputs, so the rows on screen are the ones its paged stream emits;
+     * [state] is only overridden where a test needs a value no fixture carries, such as an open
+     * details sheet.
+     */
+    private fun setScreen(
+        fixture: LogViewerFixture,
+        state: LogViewerUiState = logViewerFixtureState(fixture),
+    ) {
         composeTestRule.setContent {
             FGFChallengeTheme {
-                LogViewerScreen(state = state, onAction = { actions += it })
+                LogViewerScreen(
+                    state = state,
+                    logs = logViewerFixtureItems(fixture),
+                    onAction = { actions += it },
+                )
             }
         }
     }
