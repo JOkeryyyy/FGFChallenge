@@ -45,7 +45,15 @@
     <string name="log_viewer_append_error_title">Couldn\'t load more</string>
     <string name="log_viewer_append_error_message">Please try again.</string>
 
+    <!--
+        Paging refresh failure: reading the query out of the stored snapshot failed, which is a
+        different thing from the launch refresh failing to replace that snapshot. Generic copy, per
+        ARCHITECTURE.md: the UI never names the infrastructure cause.
+    -->
+    <string name="log_viewer_page_error_title">Couldn\'t load results</string>
+    <string name="log_viewer_page_error_message">Please try again.</string>
+
     <!-- Filtered-empty result -->
     <string name="log_viewer_no_results_title">No matching logs</string>
-    <string name="log_viewer_no_results_message">Try a different search term.</string>
+    <string name="log_viewer_no_results_message">Try a different search term or fewer filters.</string>
 </resources>

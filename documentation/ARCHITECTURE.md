@@ -386,6 +386,8 @@ Filter options are unfiltered snapshot metadata: distinct tags and dataset laten
 
 The ViewModel reflects typed search text immediately and derives one immutable `LogQuery` for the active inputs. A query change replaces the paged-row and aggregate-summary collections together; use a latest-generation mechanism when necessary to avoid showing results from an obsolete query.
 
+Typed text reaches that derivation only once it settles: the state — and so the field — updates on the keystroke, while the query waits out a short pause in typing, since every distinct query starts both a new Pager and a new full-result aggregate. Blank text commits at once, as do the deliberate commits (filter Apply, Clear All, sort), which are never made to wait on a pause. Cancellation of superseded work is unchanged and still required: a debounce reduces how many generations are started, not the rule that a started one may be replaced.
+
 The active generation passes the same query value to `pagedLogs(query)` and `summary(query)`. Presentation clears or marks the prior summary pending when criteria change so an old total is not labelled as belonging to new rows.
 
 ## Error handling

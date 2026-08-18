@@ -84,6 +84,8 @@ private const val NO_RESULTS_KEY = "empty:log-viewer-no-results"
 private const val NO_RESULTS_CONTENT_TYPE = "log-viewer-no-results"
 private const val APPEND_KEY = "append:log-viewer-append-state"
 private const val APPEND_CONTENT_TYPE = "log-viewer-append-state"
+private const val REFRESH_ERROR_KEY = "refresh:log-viewer-refresh-error"
+private const val REFRESH_ERROR_CONTENT_TYPE = "log-viewer-refresh-error"
 
 /**
  * Removes text focus for a tap no child has claimed, allowing the system keyboard to dismiss.
@@ -309,20 +311,39 @@ private fun LogViewerContent(
                     bottom = Spacing.lg,
                 ),
         ) {
-            if (state.hasNoMatches) {
+            when {
+                // A failed generation takes precedence over both other branches: it is why the list
+                // is short or empty, and "no matching logs" would state a result the query never
+                // produced. The rows follow the notice rather than being replaced by it, so a retry
+                // that fails again costs nothing the previous generation had already loaded.
+                logs.loadState.refresh is LoadState.Error -> {
+                    item(key = REFRESH_ERROR_KEY, contentType = REFRESH_ERROR_CONTENT_TYPE) {
+                        ListLoadError(
+                            title = stringResource(R.string.log_viewer_page_error_title),
+                            message = stringResource(R.string.log_viewer_page_error_message),
+                            onRetry = logs::retry,
+                        )
+                    }
+                    pagedLogItems(logs = logs, onAction = onAction)
+                }
+
                 // Only once the aggregate has *counted* zero — never because the loaded window
                 // happens to be empty, which is also true of every query while its first page loads.
                 // The state is one item in the same list rather than a replacement layout, so the
                 // summary card, search field, and result row stay exactly where they were.
-                item(key = NO_RESULTS_KEY, contentType = NO_RESULTS_CONTENT_TYPE) {
-                    NoResultsContent(
-                        title = stringResource(R.string.log_viewer_no_results_title),
-                        message = stringResource(R.string.log_viewer_no_results_message),
-                    )
+                state.hasNoMatches -> {
+                    item(key = NO_RESULTS_KEY, contentType = NO_RESULTS_CONTENT_TYPE) {
+                        NoResultsContent(
+                            title = stringResource(R.string.log_viewer_no_results_title),
+                            message = stringResource(R.string.log_viewer_no_results_message),
+                        )
+                    }
                 }
-            } else {
-                pagedLogItems(logs = logs, onAction = onAction)
-                appendStateItem(logs = logs)
+
+                else -> {
+                    pagedLogItems(logs = logs, onAction = onAction)
+                    appendStateItem(logs = logs)
+                }
             }
         }
     }
@@ -377,7 +398,8 @@ private fun LazyListScope.pagedLogItems(
  * Retry calls Paging's own [LazyPagingItems.retry] rather than travelling through
  * `LogViewerAction`: the failed load belongs to the `LazyPagingItems` instance, which the ViewModel
  * neither owns nor can address, so routing it through the reducer would mean inventing a channel
- * back to a component the screen is already holding.
+ * back to a component the screen is already holding. The refresh failure above retries the same
+ * way and for the same reason.
  */
 private fun LazyListScope.appendStateItem(logs: LazyPagingItems<LogViewerListItem>) {
     when (logs.loadState.append) {
@@ -389,7 +411,11 @@ private fun LazyListScope.appendStateItem(logs: LazyPagingItems<LogViewerListIte
 
         is LoadState.Error -> {
             item(key = APPEND_KEY, contentType = APPEND_CONTENT_TYPE) {
-                AppendError(onRetry = logs::retry)
+                ListLoadError(
+                    title = stringResource(R.string.log_viewer_append_error_title),
+                    message = stringResource(R.string.log_viewer_append_error_message),
+                    onRetry = logs::retry,
+                )
             }
         }
 
@@ -415,8 +441,15 @@ private fun AppendProgress(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * The one in-list failure notice, used by both Paging load states: only the copy differs, and
+ * neither variant names the underlying cause — `ARCHITECTURE.md` requires generic load-state UI and
+ * Paging's own retry rather than branching on an infrastructure exception.
+ */
 @Composable
-private fun AppendError(
+private fun ListLoadError(
+    title: String,
+    message: String,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -426,12 +459,12 @@ private fun AppendError(
         verticalArrangement = Arrangement.spacedBy(Spacing.xxs),
     ) {
         Text(
-            text = stringResource(R.string.log_viewer_append_error_title),
+            text = title,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text = stringResource(R.string.log_viewer_append_error_message),
+            text = message,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -175,10 +175,14 @@ class LogViewerFixturesTest {
     }
 
     @Test
-    fun `filtered state keeps the active query`() {
+    fun `filtered state applies one structured filter and reports it as active`() {
         val state = LogViewerFixtures.filteredState()
 
-        assertThat(state.query).isEqualTo(LogViewerFixtures.FILTERED_QUERY)
+        // Narrowed by a tag rather than by search text: the field searches message or ID only, so a
+        // sample of `network`-tagged rows can only be reached through the filter that selects them.
+        assertThat(state.query).isEmpty()
+        assertThat(state.filters.tags).isEqualTo(setOf(LogViewerFixtures.FILTERED_TAG))
+        assertThat(state.activeFilterCount).isEqualTo(1)
         assertThat(state.summary).isEqualTo(LogViewerSummaryState.Ready(LogViewerFixtures.filteredSummary))
         assertThat(LogViewerFixtures.FILTERED_RESULT_COUNT).isEqualTo(718)
         assertThat(LogViewerFixtures.filteredItems.filterIsInstance<LogViewerListItem.LogRow>()).hasSize(7)

@@ -22,7 +22,15 @@ import androidx.compose.ui.unit.dp
 import com.example.fgfchallenge.core.designsystem.R
 import com.example.fgfchallenge.core.designsystem.theme.FGFChallengeTheme
 
-/** Search-as-you-type field for message/tag/severity. Disabled while the initial load is in flight. */
+/**
+ * Search-as-you-type field for the caller's free-text query.
+ *
+ * The placeholder names `message` and log ID because those are the only fields the product searches
+ * — structured conditions such as tag and severity are the filter sheet's, not this field's — and a
+ * placeholder that promised more would be the one part of the screen telling the user otherwise.
+ *
+ * [enabled] lets a caller lock the field while it has nothing to search yet.
+ */
 @Composable
 fun LogSearchField(
     query: String,

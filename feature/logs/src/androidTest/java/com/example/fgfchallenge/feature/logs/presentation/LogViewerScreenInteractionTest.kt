@@ -130,14 +130,16 @@ class LogViewerScreenInteractionTest {
 
         // performTextInput commits the whole string as one IME edit, so this asserts that the field
         // reports what was typed, not that it reports once per character.
-        composeTestRule.onNodeWithText("Search message, tag, severity").performTextInput("net")
+        composeTestRule.onNodeWithText("Search message or log ID").performTextInput("net")
 
         assertThat(actions).containsExactly(LogViewerAction.QueryChanged("net"))
     }
 
     @Test
     fun clearingTheSearchFieldReportsAnEmptyQuery() {
-        setScreen(LogViewerFixture.Filtered)
+        // The fixture with search text in the field: the clear button only exists while a query is
+        // present, and `Filtered` is narrowed by a structured filter rather than by typing.
+        setScreen(LogViewerFixture.FilteredEmpty)
 
         composeTestRule.onNodeWithContentDescription("Clear search").performClick()
 

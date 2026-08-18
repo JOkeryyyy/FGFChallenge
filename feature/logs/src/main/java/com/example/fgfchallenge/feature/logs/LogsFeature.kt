@@ -124,3 +124,7 @@ private fun AppendLoadingPreview() = LogViewerFixturePreview(LogViewerFixture.Ap
 @Preview(name = "Append retry 360dp", widthDp = 360, heightDp = 640)
 @Composable
 private fun AppendErrorPreview() = LogViewerFixturePreview(LogViewerFixture.AppendError, darkTheme = false)
+
+@Preview(name = "Page refresh retry 360dp", widthDp = 360, heightDp = 640)
+@Composable
+private fun PageRefreshErrorPreview() = LogViewerFixturePreview(LogViewerFixture.PageRefreshError, darkTheme = false)

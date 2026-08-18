@@ -21,12 +21,15 @@ import com.example.fgfchallenge.feature.logs.presentation.model.toggleTag
 import com.example.fgfchallenge.feature.logs.presentation.model.utcDateOf
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -68,17 +71,48 @@ internal class LogViewerViewModel
         val state: StateFlow<LogViewerUiState> = _state.asStateFlow()
 
         /**
+         * The search text the database is allowed to see: the typed text, settled.
+         *
+         * The field itself stays search-as-you-type — [LogViewerUiState.query] is updated on the
+         * keystroke and the text renders immediately — but each keystroke would otherwise be a new
+         * [LogQuery], and every new query starts *two* pieces of database work: a fresh Pager and a
+         * fresh full-result aggregate over the whole filtered set. Typing a seven-character word
+         * that way costs seven of each, six of them cancelled before they are read. Waiting for the
+         * typing to stop collapses that to one.
+         *
+         * Blank text is committed immediately instead of waited on, because returning to the
+         * unfiltered list is the end of a search rather than a step in composing one — clearing the
+         * field should not sit for [SEARCH_DEBOUNCE_MILLIS] showing results the user just dismissed.
+         */
+        @OptIn(FlowPreview::class)
+        private val settledSearchText: Flow<String> =
+            _state
+                .map { it.query }
+                .distinctUntilChanged()
+                .debounce { text -> if (text.isBlank()) 0L else SEARCH_DEBOUNCE_MILLIS }
+
+        /**
          * The active criteria, derived from state and de-duplicated.
          *
          * [distinctUntilChanged] is what keeps selecting a row, editing the filter draft, or
          * dismissing a sheet from restarting the database work: those change [state] but not the
          * query. It also means a search that normalizes to the same value — trailing whitespace,
          * say — re-uses the running queries instead of discarding their results.
+         *
+         * The settled search text is substituted back into the state *before* the query is derived,
+         * rather than copied over the derived query, so [activeLogQuery] stays the single place that
+         * normalizes any of these inputs — a rule added there applies to the debounced text too.
+         *
+         * Only the text is delayed. A filter Apply, a Clear All that follows it, and a sort toggle
+         * are deliberate commits rather than characters on their way to one, so they pass through
+         * this flow at once; combining them with the settled text is also what keeps a keystroke
+         * from emitting at all until it settles, since the query it produces still holds the
+         * previous text and is dropped as a duplicate.
          */
         private val activeQuery: Flow<LogQuery> =
-            _state
-                .map { it.activeLogQuery() }
-                .distinctUntilChanged()
+            combine(_state, settledSearchText) { state, searchText ->
+                state.copy(query = searchText).activeLogQuery()
+            }.distinctUntilChanged()
 
         /**
          * The list, as display-ready items grouped under UTC minute headers.
@@ -348,5 +382,15 @@ internal class LogViewerViewModel
                     updateQueryInputs { it.copy(filterOptions = options) }
                 }
             }
+        }
+
+        private companion object {
+            /**
+             * How long the typed search text has to stand still before it reaches the database.
+             *
+             * Long enough that the characters of one word do not each start their own Pager and
+             * aggregate, short enough that a user who stops typing does not notice having waited.
+             */
+            const val SEARCH_DEBOUNCE_MILLIS = 300L
         }
     }
