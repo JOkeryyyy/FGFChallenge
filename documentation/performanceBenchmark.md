@@ -45,7 +45,21 @@ Complete every line before a recorded run, and record any intentional deviation 
 - [ ] Window, transition, and animator scales each `1.0`.
 - [ ] Device cooled to the documented starting range; prefer running unplugged after charging so
       charging heat is not part of the measurement.
-- [ ] `androidx.benchmark.junit4.SideEffectRunListener` passed to every dry and recorded run.
+- [ ] Display kept awake for the whole run, or no secure lock screen. The cooling gaps are longer
+      than a typical screen timeout, and an activity launched behind a keyguard never renders — the
+      scenario then fails as a UI timeout that looks like an app problem. The suite wakes the device
+      and dismisses an *unsecured* keyguard itself; a secured one it cannot.
+- [ ] `androidx.benchmark.macro.junit4.SideEffectRunListener` passed to every dry and recorded run.
+
+To keep the display on while the cable is attached, and to put it back afterwards:
+
+```bash
+adb shell svc power stayon usb
+```
+
+```bash
+adb shell svc power stayon false
+```
 
 Animation scales, if they are not already `1.0`:
 
@@ -96,7 +110,7 @@ iterations reuse the seeded database.
 ```bash
 ./gradlew :benchmark:connectedBenchmarkAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.dryRunMode.enable=true \
-  -Pandroid.testInstrumentationRunnerArguments.listener=androidx.benchmark.junit4.SideEffectRunListener
+  -Pandroid.testInstrumentationRunnerArguments.listener=androidx.benchmark.macro.junit4.SideEffectRunListener
 ```
 
 Expected: PASS with one non-measured iteration per method, and every method reaching its exact
@@ -131,7 +145,7 @@ Then, per scenario — substituting `scrollInitialWindow` / `crossFirstPagingBou
 ```bash
 ./gradlew :benchmark:connectedBenchmarkAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.class=com.example.fgfchallenge.benchmark.LogViewerMacrobenchmark#scrollInitialWindow \
-  -Pandroid.testInstrumentationRunnerArguments.listener=androidx.benchmark.junit4.SideEffectRunListener
+  -Pandroid.testInstrumentationRunnerArguments.listener=androidx.benchmark.macro.junit4.SideEffectRunListener
 ```
 
 ```bash

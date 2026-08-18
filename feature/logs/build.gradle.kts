@@ -48,6 +48,22 @@ androidComponents {
     }
 }
 
+// That variant's test task would otherwise also run the shared `src/test` suite a second time,
+// including the Paparazzi goldens — which are recorded against, and verified for, the debug variant
+// only. This task exists for `src/testBenchmark`, so it runs exactly that: every benchmark-variant
+// test class is named `*BenchmarkTest`/`Benchmark*Test`, and `failOnNoMatchingTests` makes a rename
+// that escapes the pattern fail loudly instead of silently running nothing.
+// `configureEach` rather than `named`: AGP registers the variant's test task after this script is
+// evaluated, so looking it up by name here would not find it.
+tasks.withType<Test>().configureEach {
+    if (name == "testBenchmarkUnitTest") {
+        filter {
+            includeTestsMatching("*Benchmark*Test")
+            isFailOnNoMatchingTests = true
+        }
+    }
+}
+
 dependencies {
     implementation(projects.core.network)
     implementation(projects.core.designsystem)

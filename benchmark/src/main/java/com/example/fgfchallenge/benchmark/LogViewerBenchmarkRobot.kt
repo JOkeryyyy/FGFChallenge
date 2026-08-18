@@ -22,6 +22,22 @@ internal class LogViewerBenchmarkRobot(
     private val device: UiDevice,
 ) {
     /**
+     * Wakes the display and dismisses an unsecured keyguard before an iteration starts.
+     *
+     * A recorded run cools the device between scenarios, which is long enough for the screen to time
+     * out. A launched activity behind a lock screen never renders, so without this the first wait of
+     * the next scenario times out and reports a UI failure for what is really a sleeping phone. It
+     * cannot dismiss a *secured* keyguard — the runbook's device preparation covers that.
+     */
+    fun wakeAndDismissKeyguard() {
+        if (!device.isScreenOn) {
+            device.wakeUp()
+        }
+        device.pressMenu()
+        device.waitForIdle(SETTLE_TIMEOUT_MS)
+    }
+
+    /**
      * The unfiltered default. The generous timeout is for the very first benchmark launch, which
      * generates and inserts the 100,000-row fixture before the viewer can show anything.
      */

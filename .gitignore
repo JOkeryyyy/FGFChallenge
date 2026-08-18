@@ -17,3 +17,6 @@ build/
 local.properties
 **/superpowers/plans/
 .claude/
+# Local Macrobenchmark evidence: JSON and Perfetto traces from a physical-device run.
+# The protocol and the per-run template stay tracked under documentation/.
+/benchmark-results/

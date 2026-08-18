@@ -32,8 +32,8 @@ predicates; the Hilt-backed `LogViewerViewModel` with one bounded
 assembled screen with its startup loading/error, populated, filtered,
 no-results, page-refresh, and append states.
 
-Remaining roadmap work is the optional performance smoke test and the final
-verification/delivery pass.
+Remaining roadmap work is the final verification/delivery pass; the optional
+performance suite is in place and may be run at any time.
 
 ## Prerequisites
 
@@ -69,6 +69,36 @@ checks; it never formats, modifies, or stages files.
 | Run instrumented tests on a device/emulator | `./gradlew :app:connectedDebugAndroidTest` |
 | Run log viewer interaction tests on a device/emulator | `./gradlew :feature:logs:connectedDebugAndroidTest` |
 | Run design-system component tests on a device/emulator | `./gradlew :core:designsystem:connectedDebugAndroidTest` |
+| Assemble the release-like Macrobenchmark target | `./gradlew :app:assembleBenchmark` |
+| Run benchmark-variant unit tests (100k fixture contract) | `./gradlew :feature:logs:testBenchmarkUnitTest` |
+
+### Optional performance benchmarks
+
+Physical device only, and **not a delivery gate**: no result here blocks CI,
+acceptance, or delivery. Prepare the device first — battery ≥ 80%, Battery
+Saver off, brightness and refresh rate fixed, animation scales `1.0`, cooled —
+following [`documentation/performanceBenchmark.md`](documentation/performanceBenchmark.md).
+
+Verify the selectors and seed the deterministic 100,000-row fixture with a
+non-measured dry run:
+
+```bash
+./gradlew :benchmark:connectedBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.dryRunMode.enable=true -Pandroid.testInstrumentationRunnerArguments.listener=androidx.benchmark.macro.junit4.SideEffectRunListener
+```
+
+Then record one scenario at a time, cooling the device between them
+(`scrollInitialWindow`, `crossFirstPagingBoundary`, `searchTimedOut`,
+`applyCombinedFilter`):
+
+```bash
+./gradlew :benchmark:connectedBenchmarkAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.fgfchallenge.benchmark.LogViewerMacrobenchmark#scrollInitialWindow -Pandroid.testInstrumentationRunnerArguments.listener=androidx.benchmark.macro.junit4.SideEffectRunListener
+```
+
+Copy the JSON and the ten Perfetto traces out of
+`benchmark/build/outputs/connected_android_test_additional_output/benchmark/connected/`
+into `benchmark-results/<run-id>/`, which is git-ignored, and fill in
+[`documentation/performance-run-template.md`](documentation/performance-run-template.md).
+Compare only runs from the same device under matching recorded system state.
 
 ## Module graph
 
@@ -87,13 +117,16 @@ Core modules never depend on app or feature modules.
 | `:feature:logs` | Public `LogsFeature()` entry point, and the feature-owned Room database, repository, query builder, and presentation. |
 | `:core:network` | Retrofit/OkHttp/Kotlinx Serialization networking infrastructure. |
 | `:core:designsystem` | Shared Compose Material 3 theme (`FGFChallengeTheme`) and design-system building blocks. |
+| `:benchmark` | Optional out-of-process Macrobenchmark test APK. It measures `:app`'s benchmark variant and is never part of a shipping build. |
 
 ## Prototype scope note
 
 The Room/Paging flow keeps basic retryable failure handling and no standalone
 domain layer: query coordination is one pure function plus the ViewModel.
-A performance smoke test may be run now that the core flow works, but it and
-any 100k benchmark evidence are optional rather than delivery requirements.
+An optional Macrobenchmark suite measures the viewer on one documented physical
+device against a benchmark-only deterministic 100,000-row Room fixture; only
+the snapshot-refresh strategy differs in that variant, and the results are
+observational rather than delivery requirements.
 One representative screenshot test per screen demonstrates the visual-test
 approach; the existing instrumented coverage is retained without new
 interaction-test work. A screen recording remains a delivery artifact.

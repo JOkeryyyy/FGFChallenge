@@ -101,10 +101,13 @@ class LogViewerMacrobenchmark {
             iterations = ITERATIONS,
             startupMode = null,
             setupBlock = {
+                val robot = LogViewerBenchmarkRobot(device)
+                // Before pressHome, because a display that slept during the cooling gap would
+                // otherwise swallow every gesture below and fail as a UI timeout.
+                robot.wakeAndDismissKeyguard()
                 pressHome()
                 killProcess()
                 startActivityAndWait()
-                val robot = LogViewerBenchmarkRobot(device)
                 robot.awaitDefaultResult()
                 prepare(robot)
             },
