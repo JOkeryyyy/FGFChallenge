@@ -3,7 +3,6 @@ import com.android.build.api.variant.HostTestBuilder
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.paparazzi)
@@ -67,7 +66,6 @@ tasks.withType<Test>().configureEach {
 dependencies {
     // Temporary bridge while presentation remains in this legacy module; Task 3 moves it.
     implementation(projects.feature.logs.data)
-    implementation(projects.core.network)
     implementation(projects.core.designsystem)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.foundation)
@@ -80,26 +78,16 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.paging.common)
     implementation(libs.androidx.paging.compose)
-    implementation(libs.androidx.room.paging)
-    implementation(libs.androidx.room.runtime)
     implementation(libs.hilt.android)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.kotlinx.serialization.json)
-    implementation(libs.retrofit.core)
-    ksp(libs.androidx.room.compiler)
     ksp(libs.hilt.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
     testImplementation(libs.assertk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
-    // Room's DAO and Paging tests run host-side, like every other test in CI. Robolectric supplies
-    // the `Context` and the SQLite implementation, so the queries under test are the real ones.
-    testImplementation(libs.androidx.junit)
-    testImplementation(libs.robolectric)
-    // Collects a `Flow<PagingData<…>>` into the rows a list would show, so the repository's paged
-    // stream can be asserted without a UI.
+    // Collects the ViewModel's `Flow<PagingData<…>>` without a Compose host.
     testImplementation(libs.androidx.paging.testing)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
@@ -107,8 +95,4 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.assertk)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-    testImplementation(platform(libs.okhttp.bom))
-    testImplementation(libs.okhttp.core)
-    testImplementation(libs.okhttp.mockwebserver)
-    testImplementation(libs.retrofit.kotlinx.serialization)
 }

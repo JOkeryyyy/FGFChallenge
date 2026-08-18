@@ -10,4 +10,4 @@ package com.example.fgfchallenge.feature.logs.data.error
  * caused it, so classifying further would be a distinction nothing acts on. Add a case only when
  * a caller genuinely behaves differently for it.
  */
-data object LogsDataError
+data object LogsDataError : Error

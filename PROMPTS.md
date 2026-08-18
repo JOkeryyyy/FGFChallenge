@@ -2,6 +2,11 @@
 
 - Date: 2026-08-18
 - Tool: Codex
+- Task: Correct the Logs data-module split review findings without changing feature behavior.
+- Key prompt: Restore the feature-local typed `Result` error bound and remove data-owned network, Room, serialization, Retrofit, MockWebServer, and related test dependencies from the temporary legacy presentation bridge while preserving its actual presentation dependencies and focused verification.
+
+- Date: 2026-08-18
+- Tool: Codex
 - Task: Relocate the Logs data layer, its unit tests, and benchmark refresh variants into `:feature:logs:data` without changing behavior.
 - Key prompt: Move the complete Logs data implementation and benchmark-specific source sets into the new data module, expose only the approved repository/model/result contract, preserve the old feature as a temporary presentation bridge, record a tests-before-production compilation failure, and retain benchmark test-host wiring.
 

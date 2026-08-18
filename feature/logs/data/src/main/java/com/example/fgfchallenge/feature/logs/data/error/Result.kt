@@ -12,12 +12,14 @@ package com.example.fgfchallenge.feature.logs.data.error
  * not network infrastructure. It moves to a neutral shared module only if a second feature
  * genuinely needs it.
  */
-sealed interface Result<out D, out E> {
+interface Error
+
+sealed interface Result<out D, out E : Error> {
     data class Success<out D>(
         val data: D,
     ) : Result<D, Nothing>
 
-    data class Error<out E>(
+    data class Error<out E : com.example.fgfchallenge.feature.logs.data.error.Error>(
         val error: E,
     ) : Result<Nothing, E>
 }
@@ -25,13 +27,13 @@ sealed interface Result<out D, out E> {
 /** A [Result] whose success case carries no payload. */
 typealias EmptyResult<E> = Result<Unit, E>
 
-internal inline fun <T, E, R> Result<T, E>.map(map: (T) -> R): Result<R, E> =
+internal inline fun <T, E : Error, R> Result<T, E>.map(map: (T) -> R): Result<R, E> =
     when (this) {
         is Result.Error -> Result.Error(error)
         is Result.Success -> Result.Success(map(data))
     }
 
-internal inline fun <T, E> Result<T, E>.onSuccess(action: (T) -> Unit): Result<T, E> =
+internal inline fun <T, E : Error> Result<T, E>.onSuccess(action: (T) -> Unit): Result<T, E> =
     when (this) {
         is Result.Error -> {
             this
@@ -43,7 +45,7 @@ internal inline fun <T, E> Result<T, E>.onSuccess(action: (T) -> Unit): Result<T
         }
     }
 
-internal inline fun <T, E> Result<T, E>.onFailure(action: (E) -> Unit): Result<T, E> =
+internal inline fun <T, E : Error> Result<T, E>.onFailure(action: (E) -> Unit): Result<T, E> =
     when (this) {
         is Result.Error -> {
             action(error)
@@ -55,4 +57,4 @@ internal inline fun <T, E> Result<T, E>.onFailure(action: (E) -> Unit): Result<T
         }
     }
 
-internal fun <T, E> Result<T, E>.asEmptyResult(): EmptyResult<E> = map { }
+internal fun <T, E : Error> Result<T, E>.asEmptyResult(): EmptyResult<E> = map { }
