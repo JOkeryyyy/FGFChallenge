@@ -51,10 +51,12 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.paging.LoadState
@@ -97,6 +99,15 @@ private const val APPEND_KEY = "append:log-viewer-append-state"
 private const val APPEND_CONTENT_TYPE = "log-viewer-append-state"
 private const val REFRESH_ERROR_KEY = "refresh:log-viewer-refresh-error"
 private const val REFRESH_ERROR_CONTENT_TYPE = "log-viewer-refresh-error"
+
+// The four anchors the out-of-process Macrobenchmark suite drives. They are resource-style ids
+// rather than accessibility labels because UI Automator has to find them by a value that does not
+// change with the query, the locale, or the count in the title.
+// See `documentation/performanceBenchmark.md`.
+private const val SEARCH_TEST_TAG = "log_viewer_search"
+private const val FILTER_TEST_TAG = "log_viewer_filter"
+private const val RESULT_TEST_TAG = "log_viewer_result"
+private const val LIST_TEST_TAG = "log_viewer_list"
 
 /**
  * Removes text focus for a tap no child has claimed, allowing the system keyboard to dismiss.
@@ -142,7 +153,13 @@ internal fun LogViewerScreen(
     val focusManager = LocalFocusManager.current
 
     Scaffold(
-        modifier = modifier.fillMaxSize().clearFocusOnUnconsumedTap(focusManager),
+        // Publishes every `testTag` below as an Android resource id, which is the only way an
+        // out-of-process tool can address a Compose node. It adds semantics and consumes no input.
+        modifier =
+            modifier
+                .fillMaxSize()
+                .clearFocusOnUnconsumedTap(focusManager)
+                .semantics { testTagsAsResourceId = true },
         containerColor = MaterialTheme.colorScheme.background,
         // Scaffold subtracts what the bar already consumed, so the top inset is handled once by
         // TopAppBar and this only adds the cutout, IME, and navigation-bar sides back to the body.
@@ -299,6 +316,7 @@ private fun LogViewerTopBar(
                         text = logCountTitle(summary = summary, loadedRowCount = loadedRowCount),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag(RESULT_TEST_TAG),
                     )
                 },
                 navigationIcon = {
@@ -390,7 +408,7 @@ private fun FilterAction(
         } else {
             stringResource(R.string.log_viewer_filter_action)
         }
-    IconButton(onClick = onClick) {
+    IconButton(onClick = onClick, modifier = Modifier.testTag(FILTER_TEST_TAG)) {
         BadgedBox(
             badge = {
                 if (activeFilterCount > 0) {
@@ -500,6 +518,7 @@ private fun ExpandedSearchField(
             enabled = true,
             modifier =
                 Modifier
+                    .testTag(SEARCH_TEST_TAG)
                     .widthIn(max = Dimens.contentMaxWidth)
                     .padding(horizontal = Dimens.screenHorizontalPadding)
                     .padding(bottom = Spacing.xs)
@@ -539,7 +558,9 @@ private fun LogViewerContent(
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
         LazyColumn(
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            // Only the list itself is tagged: scrolling is a list-level gesture, and rows stay keyed
+            // by the production stable IDs rather than gaining per-row automation tags.
+            modifier = Modifier.testTag(LIST_TEST_TAG).fillMaxWidth().weight(1f),
             contentPadding =
                 PaddingValues(
                     start = Dimens.screenHorizontalPadding,
