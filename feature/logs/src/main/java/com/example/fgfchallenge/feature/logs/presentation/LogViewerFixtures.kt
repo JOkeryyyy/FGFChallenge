@@ -1,31 +1,40 @@
 package com.example.fgfchallenge.feature.logs.presentation
 
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.res.stringResource
+import androidx.paging.LoadState
+import androidx.paging.LoadStates
+import androidx.paging.PagingData
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
 import com.example.fgfchallenge.core.designsystem.model.LogDetailsUi
 import com.example.fgfchallenge.core.designsystem.model.SeverityBadgeTone
 import com.example.fgfchallenge.core.designsystem.model.SeverityLegendItem
-import com.example.fgfchallenge.feature.logs.R
-import com.example.fgfchallenge.feature.logs.presentation.model.LogRowUi
-import com.example.fgfchallenge.feature.logs.presentation.model.LogSortOrder
+import com.example.fgfchallenge.feature.logs.data.model.LogEntry
+import com.example.fgfchallenge.feature.logs.data.model.Severity
 import com.example.fgfchallenge.feature.logs.presentation.model.LogViewerListItem
 import com.example.fgfchallenge.feature.logs.presentation.model.SeveritySummaryUi
-import com.example.fgfchallenge.feature.logs.presentation.model.logRowKey
-import com.example.fgfchallenge.feature.logs.presentation.model.minuteHeaderKey
-import java.text.NumberFormat
-import java.util.Locale
+import com.example.fgfchallenge.feature.logs.presentation.model.minuteHeaderBetween
+import com.example.fgfchallenge.feature.logs.presentation.model.toListItem
+import com.example.fgfchallenge.feature.logs.presentation.model.toLogDetailsUi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import java.time.Instant
 
 /**
- * Sample screen states used by the previews, the Paparazzi goldens, and — until networking and
- * processing land — `LogViewerViewModel` itself.
+ * Sample screen states and paged rows used by the previews and the Paparazzi goldens.
  *
- * The severity summaries are real: the all-logs counts are the supplied dataset's distribution and
- * the filtered counts are the wireframe's `network` search. The row lists are deliberately short
- * representative samples, so a displayed total of `5,000 results` describes the dataset the screen
- * will show once networking lands, not the number of rows in this fixture.
+ * The app itself no longer uses them: `LogViewerViewModel` reads live repository data, and the
+ * screen's two inputs — bounded state and a `PagingData` stream — are exactly the two things this
+ * file fabricates.
  *
- * Every state here is a plain value rather than a `@Composable` call, so the ViewModel can produce
- * it. Only the error copy still needs resources, which is why [logViewerFixtureState] resolves it.
+ * The rows start as [LogEntry] values, the same type the repository emits, and reach the list
+ * through the production `toListItem`/`minuteHeaderBetween` mapping rather than a parallel
+ * hand-written one. A golden therefore pins the real formatting: real UTC `ss.SSS` row times, real
+ * minute headers, real severity tones. The severity summaries are real too — the all-logs counts
+ * are the supplied dataset's distribution and the filtered counts are the wireframe's `network`
+ * search — while the row lists are deliberately short representative samples, so a displayed total
+ * of `5,000 matching` describes the dataset the screen shows in the app, not the number of rows
+ * here.
  */
 internal object LogViewerFixtures {
     const val ALL_LOGS_RESULT_COUNT: Int = 5_000
@@ -86,117 +95,92 @@ internal object LogViewerFixtures {
                 ),
         )
 
-    val loadingState: LogViewerUiState = LogViewerUiState(loadState = LogViewerLoadState.Loading)
+    /** Launch refresh in flight: skeletons, and no summary to report yet. */
+    val loadingState: LogViewerUiState = LogViewerUiState(refresh = LogViewerRefreshState.InProgress)
 
-    /** The ViewModel's starting point and what Retry and error dismissal return to. */
+    /** A completed refresh with the whole snapshot matching. */
     fun allLogsState(): LogViewerUiState =
         LogViewerUiState(
-            query = "",
-            sortOrder = LogSortOrder.NewestFirst,
-            selectedLog = null,
-            loadState =
-                LogViewerLoadState.Content(
-                    resultCount = ALL_LOGS_RESULT_COUNT,
-                    severitySummary = allLogsSummary,
-                    items = allLogsItems,
-                ),
+            refresh = LogViewerRefreshState.Complete,
+            summary = LogViewerSummaryState.Ready(allLogsSummary),
         )
 
     fun filteredState(): LogViewerUiState =
-        LogViewerUiState(
+        allLogsState().copy(
             query = FILTERED_QUERY,
-            loadState =
-                LogViewerLoadState.Content(
-                    resultCount = FILTERED_RESULT_COUNT,
-                    severitySummary = filteredSummary,
-                    items = filteredItems,
-                ),
+            summary = LogViewerSummaryState.Ready(filteredSummary),
         )
 
     fun filteredEmptyState(): LogViewerUiState =
-        LogViewerUiState(
+        allLogsState().copy(
             query = NONMATCHING_QUERY,
-            loadState =
-                LogViewerLoadState.Content(
-                    resultCount = 0,
-                    severitySummary = filteredEmptySummary,
-                    items = emptyList(),
-                ),
+            summary = LogViewerSummaryState.Ready(filteredEmptySummary),
         )
 
-    fun errorState(
-        title: String,
-        message: String,
-    ): LogViewerUiState = LogViewerUiState(loadState = LogViewerLoadState.Error(title = title, message = message))
+    /** A retryable launch failure the user has not dismissed, so the modal is up. */
+    fun errorState(): LogViewerUiState = LogViewerUiState(refresh = LogViewerRefreshState.Failed())
 
-    /** The first row of the populated fixture, so callers can open its sheet without a lookup. */
-    fun firstAllLogsRow(): LogViewerListItem.LogRow = allLogsItems.filterIsInstance<LogViewerListItem.LogRow>().first()
+    /**
+     * The same failure after the modal was dismissed, over the snapshot Room kept: the counts and
+     * rows are the previous refresh's, and the notice says so.
+     */
+    fun staleSnapshotState(): LogViewerUiState = allLogsState().copy(refresh = LogViewerRefreshState.Failed(dismissed = true))
 
-    // Newest minute first, and newest row first inside each minute, matching the default sort.
-    private val allLogsItems: List<LogViewerListItem> =
-        minuteGroup(
-            utcMinuteId = "2025-05-22T17:11Z",
-            minute = "17:11",
-            rows =
-                listOf(
-                    row("1711-58123", "ERROR", SeverityBadgeTone.Error, "network", "Connection timed out", "58.123", 3_245),
-                    row("1711-46204", "FATAL", SeverityBadgeTone.Fatal, "auth", "Auth service unreachable", "46.204", 5_012),
-                    row("1711-37812", "WARN", SeverityBadgeTone.Warn, "cache", "Cache miss", "37.812", 128, true),
-                    row("1711-21439", "INFO", SeverityBadgeTone.Info, "network", "Request completed", "21.439", 412),
-                    row("1711-11098", "DEBUG", SeverityBadgeTone.Debug, "cache", "Cache lookup key=1234", "11.098", 12),
-                ),
-        ) +
-            minuteGroup(
-                utcMinuteId = "2025-05-22T17:10Z",
-                minute = "17:10",
-                rows =
-                    listOf(
-                        row("1710-59384", "ERROR", SeverityBadgeTone.Error, "network", "DNS resolution failed", "59.384", 1_284),
-                        row("1710-48660", "WARN", SeverityBadgeTone.Warn, "auth", "Token expiring soon", "48.660", 96),
-                        row("1710-33215", "INFO", SeverityBadgeTone.Info, "cache", "Cache write success", "33.215", 34),
-                        row("1710-21078", "DEBUG", SeverityBadgeTone.Debug, "network", "Retry attempt 1/3", "21.078", 802),
-                        row("1710-07026", "INFO", SeverityBadgeTone.Info, "auth", "User login success", "07.026", 268),
-                    ),
-            ) +
-            minuteGroup(
-                utcMinuteId = "2025-05-22T17:09Z",
-                minute = "17:09",
-                rows =
-                    listOf(
-                        row("1709-45672", "WARN", SeverityBadgeTone.Warn, "network", "High latency detected", "45.672", 2_190),
-                    ),
-            )
+    /** The first entry of the populated fixture, so callers can open its sheet without a lookup. */
+    fun firstAllLogsEntry(): LogEntry = allLogsEntries.first()
 
-    // Every row matches FILTERED_QUERY on its tag, so the sample stays consistent with the query.
-    private val filteredItems: List<LogViewerListItem> =
-        minuteGroup(
-            utcMinuteId = "2025-05-22T17:11Z",
-            minute = "17:11",
-            rows =
-                listOf(
-                    row("1711-58123", "ERROR", SeverityBadgeTone.Error, "network", "Connection timed out", "58.123", 3_245),
-                    row("1711-24673", "WARN", SeverityBadgeTone.Warn, "network", "Slow response detected", "24.673", 1_760),
-                    row("1711-21121", "INFO", SeverityBadgeTone.Info, "network", "Request completed", "21.121", 412),
-                ),
-        ) +
-            minuteGroup(
-                utcMinuteId = "2025-05-22T17:10Z",
-                minute = "17:10",
-                rows =
-                    listOf(
-                        row("1710-59384", "ERROR", SeverityBadgeTone.Error, "network", "DNS resolution failed", "59.384", 1_284),
-                        row("1710-21087", "DEBUG", SeverityBadgeTone.Debug, "network", "Retry attempt 1/3", "21.087", 802),
-                        row("1710-11011", "INFO", SeverityBadgeTone.Info, "network", "Connection established", "11.011", 155),
+    /** The details the repository lookup produces for [firstAllLogsEntry]. */
+    fun firstAllLogsDetails(): LogDetailsUi = firstAllLogsEntry().toLogDetailsUi()
+
+    val allLogsItems: List<LogViewerListItem> = allLogsEntries.toGroupedItems()
+
+    val filteredItems: List<LogViewerListItem> = filteredEntries.toGroupedItems()
+
+    /**
+     * The paged rows for [fixture], as the one-generation stream a `LazyPagingItems` collects.
+     *
+     * The load states have to be spelled out: a static `PagingData` reports nothing on its own, so
+     * without them the list would sit in a permanent refresh and never render its rows. Terminal on
+     * every side means "one complete page, nothing more to append", which is what every fixture
+     * except the two append states describes.
+     */
+    fun pagedItems(fixture: LogViewerFixture): Flow<PagingData<LogViewerListItem>> =
+        when (fixture) {
+            // No rows have loaded yet in either case: the launch refresh is still deciding whether
+            // there is a current snapshot to query at all.
+            LogViewerFixture.Loading, LogViewerFixture.Error -> pagingDataOf(emptyList())
+
+            LogViewerFixture.AllLogs -> pagingDataOf(allLogsItems)
+
+            LogViewerFixture.Filtered -> pagingDataOf(filteredItems)
+
+            LogViewerFixture.FilteredEmpty -> pagingDataOf(emptyList())
+
+            LogViewerFixture.StaleSnapshot -> pagingDataOf(allLogsItems)
+
+            LogViewerFixture.AppendLoading -> pagingDataOf(allLogsItems, append = LoadState.Loading)
+
+            LogViewerFixture.AppendError -> pagingDataOf(allLogsItems, append = LoadState.Error(AppendFailure))
+        }
+
+    private fun pagingDataOf(
+        items: List<LogViewerListItem>,
+        append: LoadState = LoadState.NotLoading(endOfPaginationReached = true),
+    ): Flow<PagingData<LogViewerListItem>> =
+        flowOf(
+            PagingData.from(
+                data = items,
+                sourceLoadStates =
+                    LoadStates(
+                        refresh = LoadState.NotLoading(endOfPaginationReached = true),
+                        prepend = LoadState.NotLoading(endOfPaginationReached = true),
+                        append = append,
                     ),
-            ) +
-            minuteGroup(
-                utcMinuteId = "2025-05-22T17:09Z",
-                minute = "17:09",
-                rows =
-                    listOf(
-                        row("1709-45672", "WARN", SeverityBadgeTone.Warn, "network", "High latency detected", "45.672", 2_190),
-                    ),
-            )
+            ),
+        )
+
+    /** Never surfaced: the append-failure UI reports its own copy rather than an exception. */
+    private object AppendFailure : Throwable("Fixture append failure")
 
     /** Legend order follows the wireframe: error-like severities first, then the rest. */
     private fun legendItems(
@@ -213,102 +197,93 @@ internal object LogViewerFixtures {
             SeverityLegendItem("INFO", infoCount, SeverityBadgeTone.Info),
             SeverityLegendItem("DEBUG", debugCount, SeverityBadgeTone.Debug),
         )
-
-    /** A header followed by its rows, so every header's count matches what renders beneath it. */
-    private fun minuteGroup(
-        utcMinuteId: String,
-        minute: String,
-        rows: List<FixtureRow>,
-    ): List<LogViewerListItem> =
-        buildList {
-            add(
-                LogViewerListItem.MinuteHeader(
-                    stableKey = minuteHeaderKey(utcMinuteId),
-                    minute = minute,
-                    itemCount = rows.size,
-                ),
-            )
-            rows.forEach { fixtureRow ->
-                add(
-                    LogViewerListItem.LogRow(
-                        stableKey = logRowKey(fixtureRow.row.id),
-                        row = fixtureRow.row,
-                        details = fixtureRow.toDetails(utcMinuteId),
-                    ),
-                )
-            }
-        }
-
-    private fun row(
-        id: String,
-        severityLabel: String,
-        severityTone: SeverityBadgeTone,
-        tagLabel: String,
-        message: String,
-        time: String,
-        latencyMs: Int,
-        aiGenerated: Boolean = false,
-    ): FixtureRow =
-        FixtureRow(
-            row =
-                LogRowUi(
-                    id = id,
-                    severityLabel = severityLabel,
-                    severityTone = severityTone,
-                    tagLabel = tagLabel,
-                    message = message,
-                    time = time,
-                ),
-            latencyMs = latencyMs,
-            aiGenerated = aiGenerated,
-        )
-
-    /**
-     * One row plus the two values only the details sheet renders, kept out of [LogRowUi] because the
-     * list itself never shows them.
-     */
-    private data class FixtureRow(
-        val row: LogRowUi,
-        val latencyMs: Int,
-        val aiGenerated: Boolean,
-    )
-
-    /**
-     * Details are derived from the row and its enclosing minute rather than restated, which is what
-     * keeps `logId` equal to the row's ID and the full timestamp consistent with the group header.
-     *
-     * The formatted latency and the Yes/No flag are display values the mapping milestone will
-     * produce from application models; the locale is fixed for the same reason the result count's
-     * is — identical text in every golden on every machine.
-     */
-    private fun FixtureRow.toDetails(utcMinuteId: String): LogDetailsUi =
-        LogDetailsUi(
-            severityLabel = row.severityLabel,
-            severityTone = row.severityTone,
-            message = row.message,
-            tag = row.tagLabel,
-            timestampUtc = "${utcMinuteId.removeSuffix("Z")}:${row.time}Z",
-            latency = "${NumberFormat.getIntegerInstance(Locale.US).format(latencyMs)} ms",
-            aiGenerated = if (aiGenerated) "Yes" else "No",
-            logId = row.id,
-            sessionId = SESSION_ID,
-        )
 }
 
-/** The fixture states a preview, a snapshot test, or the launched app can ask for. */
+// Newest first, matching the default sort. The IDs echo each entry's minute and `ss.SSS` so a
+// golden, an interaction test, and the row it names stay readable together.
+private val allLogsEntries: List<LogEntry> =
+    listOf(
+        entry("1711-58123", "17:11:58.123", Severity.ERROR, "network", "Connection timed out", 3_245),
+        entry("1711-46204", "17:11:46.204", Severity.FATAL, "auth", "Auth service unreachable", 5_012),
+        entry("1711-37812", "17:11:37.812", Severity.WARN, "cache", "Cache miss", 128, aiGenerated = true),
+        entry("1711-21439", "17:11:21.439", Severity.INFO, "network", "Request completed", 412),
+        entry("1711-11098", "17:11:11.098", Severity.DEBUG, "cache", "Cache lookup key=1234", 12),
+        entry("1710-59384", "17:10:59.384", Severity.ERROR, "network", "DNS resolution failed", 1_284),
+        entry("1710-48660", "17:10:48.660", Severity.WARN, "auth", "Token expiring soon", 96),
+        entry("1710-33215", "17:10:33.215", Severity.INFO, "cache", "Cache write success", 34),
+        entry("1710-21078", "17:10:21.078", Severity.DEBUG, "network", "Retry attempt 1/3", 802),
+        entry("1710-07026", "17:10:07.026", Severity.INFO, "auth", "User login success", 268),
+        entry("1709-45672", "17:09:45.672", Severity.WARN, "network", "High latency detected", 2_190),
+    )
+
+// Every entry carries the `network` tag, so the sample stays consistent with FILTERED_QUERY.
+private val filteredEntries: List<LogEntry> =
+    listOf(
+        entry("1711-58123", "17:11:58.123", Severity.ERROR, "network", "Connection timed out", 3_245),
+        entry("1711-24673", "17:11:24.673", Severity.WARN, "network", "Slow response detected", 1_760),
+        entry("1711-21121", "17:11:21.121", Severity.INFO, "network", "Request completed", 412),
+        entry("1710-59384", "17:10:59.384", Severity.ERROR, "network", "DNS resolution failed", 1_284),
+        entry("1710-21087", "17:10:21.087", Severity.DEBUG, "network", "Retry attempt 1/3", 802),
+        entry("1710-11011", "17:10:11.011", Severity.INFO, "network", "Connection established", 155),
+        entry("1709-45672", "17:09:45.672", Severity.WARN, "network", "High latency detected", 2_190),
+    )
+
+/**
+ * Flattens entries the way the Paging transformation does, through the same two functions.
+ *
+ * Materializing the whole list is exactly what production must not do, which is why this is a
+ * fixture: a short sample is what a preview and a golden need, and reusing the production rule is
+ * what keeps them honest about the result.
+ */
+private fun List<LogEntry>.toGroupedItems(): List<LogViewerListItem> {
+    val rows = map(LogEntry::toListItem)
+    return buildList {
+        rows.forEachIndexed { index, row ->
+            minuteHeaderBetween(rows.getOrNull(index - 1), row)?.let(::add)
+            add(row)
+        }
+    }
+}
+
+private fun entry(
+    id: String,
+    utcTimeOfDay: String,
+    severity: Severity,
+    tag: String,
+    message: String,
+    latencyMs: Long,
+    aiGenerated: Boolean = false,
+): LogEntry =
+    LogEntry(
+        id = id,
+        timestamp = Instant.parse("2025-05-22T${utcTimeOfDay}Z"),
+        severity = severity,
+        tag = tag,
+        message = message,
+        latencyMs = latencyMs,
+        isAiGenerated = aiGenerated,
+        sessionId = LogViewerFixtures.SESSION_ID,
+    )
+
+/** The fixture states a preview or a snapshot test can ask for. */
 internal enum class LogViewerFixture {
     Loading,
     Error,
     AllLogs,
     Filtered,
     FilteredEmpty,
+
+    /** A dismissed refresh failure over the retained snapshot, where retry is all that is left. */
+    StaleSnapshot,
+
+    /** Loaded rows plus a page being appended, which no settled fixture can show. */
+    AppendLoading,
+
+    /** Loaded rows plus a failed append: the rows stay, the footer offers Retry. */
+    AppendError,
 }
 
-/**
- * Resolves a [LogViewerFixture] into screen state, reading the error copy from feature resources so
- * the fixtures themselves stay free of hardcoded UI strings.
- */
-@Composable
+/** Resolves a [LogViewerFixture] into the bounded screen state half of the screen's input. */
 internal fun logViewerFixtureState(fixture: LogViewerFixture): LogViewerUiState =
     when (fixture) {
         LogViewerFixture.Loading -> {
@@ -316,13 +291,14 @@ internal fun logViewerFixtureState(fixture: LogViewerFixture): LogViewerUiState 
         }
 
         LogViewerFixture.Error -> {
-            LogViewerFixtures.errorState(
-                title = stringResource(R.string.log_viewer_error_title),
-                message = stringResource(R.string.log_viewer_error_message),
-            )
+            LogViewerFixtures.errorState()
         }
 
-        LogViewerFixture.AllLogs -> {
+        LogViewerFixture.StaleSnapshot -> {
+            LogViewerFixtures.staleSnapshotState()
+        }
+
+        LogViewerFixture.AllLogs, LogViewerFixture.AppendLoading, LogViewerFixture.AppendError -> {
             LogViewerFixtures.allLogsState()
         }
 
@@ -334,3 +310,12 @@ internal fun logViewerFixtureState(fixture: LogViewerFixture): LogViewerUiState 
             LogViewerFixtures.filteredEmptyState()
         }
     }
+
+/**
+ * Resolves a [LogViewerFixture] into the paged half, collected exactly as the app collects the
+ * ViewModel's stream, so a preview and a golden exercise the real `LazyPagingItems` path rather
+ * than a list rendered to look like one.
+ */
+@Composable
+internal fun logViewerFixtureItems(fixture: LogViewerFixture): LazyPagingItems<LogViewerListItem> =
+    LogViewerFixtures.pagedItems(fixture).collectAsLazyPagingItems()

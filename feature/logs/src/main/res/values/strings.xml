@@ -2,11 +2,15 @@
     <!-- Screen shell -->
     <string name="log_viewer_title">Semantic Logs</string>
 
-    <!-- Result count and sort row. The count is pre-grouped ("5,000") before it is inserted. -->
-    <plurals name="log_viewer_result_count">
-        <item quantity="one">%1$s result</item>
-        <item quantity="other">%1$s results</item>
-    </plurals>
+    <!--
+        Result line. Both counts are pre-grouped ("100,000") before they are inserted. It reports
+        the matching and loaded counts side by side on purpose: the first is the complete filtered
+        database result, the second is only what Paging currently holds, and the two are routinely
+        different by three orders of magnitude.
+    -->
+    <string name="log_viewer_result_count">%1$s matching · %2$s loaded</string>
+    <!-- Shown until the aggregate for the current query has been counted; never a stale total. -->
+    <string name="log_viewer_result_count_pending">Counting matches · %1$s loaded</string>
     <string name="log_viewer_sort_newest_first">Newest first</string>
     <string name="log_viewer_sort_oldest_first">Oldest first</string>
     <string name="log_viewer_sort_action">Change sort order</string>
@@ -21,11 +25,25 @@
     <!-- Severity summary card -->
     <!-- "percent" does not inflect in English, so a <plurals> resource adds no value here. -->
     <string name="log_viewer_error_density" tools:ignore="PluralsCandidate">%1$d%% Error Density</string>
-    <string name="log_viewer_error_density_caption">ERROR + FATAL / visible logs</string>
+    <!-- "All matching logs", not the loaded ones: the aggregate covers the complete result. -->
+    <string name="log_viewer_error_density_caption">ERROR + FATAL / all matching logs</string>
+    <string name="log_viewer_error_density_pending">Counting matching logs…</string>
 
-    <!-- Retryable load failure -->
+    <!-- Retryable launch-refresh failure. Every cause maps to this one copy. -->
     <string name="log_viewer_error_title">Unable to load logs</string>
     <string name="log_viewer_error_message">We couldn\'t fetch logs from the server.</string>
+    <!--
+        Shown after the failure dialog is dismissed. It is the only remaining way to retry, and it
+        keeps the screen from presenting a snapshot the refresh never managed to replace as current.
+    -->
+    <string name="log_viewer_stale_snapshot">These logs may be out of date.</string>
+    <!-- One label for both retry affordances: the stale-snapshot notice and the append footer. -->
+    <string name="log_viewer_retry_action">Retry</string>
+
+    <!-- Paging append states, rendered as the last item of the list so loaded rows stay visible. -->
+    <string name="log_viewer_append_loading">Loading more logs…</string>
+    <string name="log_viewer_append_error_title">Couldn\'t load more</string>
+    <string name="log_viewer_append_error_message">Please try again.</string>
 
     <!-- Filtered-empty result -->
     <string name="log_viewer_no_results_title">No matching logs</string>

@@ -18,6 +18,18 @@ internal val phoneDeviceConfig: DeviceConfig = DeviceConfig.NEXUS_5
 internal val narrowDeviceConfig: DeviceConfig = DeviceConfig.NEXUS_5.copy(screenWidth = 960)
 
 /**
+ * 360 x 1400 dp: the reference width on a screen tall enough that the whole fixture list and the
+ * item below it are on screen at once, which is what the append states need to be visible at all.
+ * Rendered at xhdpi rather than xxhdpi to keep the golden a reasonable size.
+ */
+internal val tallDeviceConfig: DeviceConfig =
+    DeviceConfig.NEXUS_5.copy(
+        screenWidth = 720,
+        screenHeight = 2_800,
+        density = Density.XHIGH,
+    )
+
+/**
  * 760 x 900 dp, the content max width, where the pane centers and the legend sits beside the ring.
  * Rendered at xhdpi rather than xxhdpi purely to keep this golden a reasonable size.
  */
@@ -29,8 +41,13 @@ internal val wideDeviceConfig: DeviceConfig =
     )
 
 /**
- * Renders one fixture state with a discarded action callback, which is what a golden needs: these
- * pin the rendered result of a state, not what an interaction does with it.
+ * Renders one fixture with a discarded action callback, which is what a golden needs: these pin the
+ * rendered result of a state, not what an interaction does with it.
+ *
+ * Both of the screen's inputs come from the same fixture, and the paged half is collected through
+ * the real `collectAsLazyPagingItems`, so a golden exercises the actual Paging path — keys, content
+ * types, inserted minute headers, and append load states included — rather than a list dressed up
+ * to look like one.
  *
  * No fixture selects a log or opens a filter draft, so no golden covers either sheet —
  * `ModalBottomSheet` hosts its content in a separate window that Paparazzi's single-window render
@@ -45,6 +62,7 @@ internal fun Paparazzi.snapshotLogViewerScreen(
         FGFChallengeTheme(darkTheme = darkTheme) {
             LogViewerScreen(
                 state = logViewerFixtureState(fixture),
+                logs = logViewerFixtureItems(fixture),
                 onAction = {},
             )
         }

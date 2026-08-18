@@ -5,21 +5,26 @@ import com.example.fgfchallenge.core.designsystem.model.LogDetailsUi
 import com.example.fgfchallenge.feature.logs.data.model.LogFilterOptions
 import com.example.fgfchallenge.feature.logs.presentation.model.LogFilterSelection
 import com.example.fgfchallenge.feature.logs.presentation.model.LogSortOrder
-import com.example.fgfchallenge.feature.logs.presentation.model.LogViewerListItem
 import com.example.fgfchallenge.feature.logs.presentation.model.SeveritySummaryUi
 import com.example.fgfchallenge.feature.logs.presentation.model.latencyExtent
 
 /**
- * The log viewer's complete screen state: one immutable value produced by `LogViewerViewModel` and
- * rendered by `LogViewerScreen`.
+ * The log viewer's complete *bounded* screen state: one immutable value produced by
+ * `LogViewerViewModel` and rendered by `LogViewerScreen`.
+ *
+ * Bounded is the defining property. The result rows are not here and never will be — they travel
+ * separately as `Flow<PagingData<LogViewerListItem>>`, because Paging owns and evicts its own
+ * working set and a state value cannot. What is left is small and fixed in size regardless of how
+ * many logs the snapshot holds: the query inputs, the filter sheet's draft, the snapshot metadata
+ * its controls are built from, the active query's aggregate, the selected log, and how the launch
+ * refresh went.
  *
  * The screen-wide inputs ([query], [filters], [sortOrder], [selectedLog]) sit beside — not inside —
- * the mutually exclusive [loadState], so a query survives a reload and the details sheet is simply
- * "[selectedLog] is not null" rather than a separate visibility flag.
+ * [refresh], so a query survives a retry and the details sheet is simply "[selectedLog] is not null"
+ * rather than a separate visibility flag.
  *
  * [query], [filters], and [sortOrder] are also the query inputs: together they are what `toLogQuery`
- * turns into the one `LogQuery` the paged rows and [summary] are both read with. Everything here
- * stays bounded — no page of rows, no match list — which is what lets Paging own the working set.
+ * turns into the one `LogQuery` the paged rows and [summary] are both read with.
  */
 @Immutable
 internal data class LogViewerUiState(
@@ -40,7 +45,7 @@ internal data class LogViewerUiState(
     /** Aggregates over the complete result of the active query, never over the loaded rows. */
     val summary: LogViewerSummaryState = LogViewerSummaryState.Pending,
     val selectedLog: LogDetailsUi? = null,
-    val loadState: LogViewerLoadState = LogViewerLoadState.Loading,
+    val refresh: LogViewerRefreshState = LogViewerRefreshState.InProgress,
 )
 
 /**
@@ -66,6 +71,50 @@ internal val LogViewerUiState.activeFilterCount: Int
         }
 
 /**
+ * How the once-per-launch snapshot refresh went, which is what decides whether the stored snapshot
+ * may be presented as current.
+ *
+ * It is deliberately *not* the list's load state. Paging reports its own refresh, append, and retry
+ * states for the rows it is loading out of Room; this reports whether Room's contents are the
+ * latest remote snapshot at all. The two are independent: a completed refresh can be followed by a
+ * Paging append failure, and a failed refresh still leaves a queryable previous snapshot behind.
+ */
+@Immutable
+internal sealed interface LogViewerRefreshState {
+    /** The launch refresh is running. The screen shows skeletons rather than possibly stale rows. */
+    data object InProgress : LogViewerRefreshState
+
+    /** The refresh replaced the snapshot: what the list queries is the latest remote content. */
+    data object Complete : LogViewerRefreshState
+
+    /**
+     * The refresh failed, so the previous snapshot — if any — was kept but is not current.
+     *
+     * [dismissed] records that the user closed the dialog without retrying. The failure itself is
+     * not forgotten, because nothing about it stopped being true; only the modal goes away, leaving
+     * the retained snapshot readable underneath.
+     */
+    data class Failed(
+        val dismissed: Boolean = false,
+    ) : LogViewerRefreshState
+}
+
+/** The retryable failure dialog is up exactly while an unacknowledged refresh failure stands. */
+internal val LogViewerUiState.showsRefreshFailure: Boolean
+    get() = refresh is LogViewerRefreshState.Failed && !refresh.dismissed
+
+/**
+ * A dismissed failure still has to be visible somewhere, which is what the stale-snapshot notice is
+ * for.
+ *
+ * Without it, dismissing the dialog would be a dead end: retry lives only on that dialog, and the
+ * rows left underneath would silently read as the current snapshot — the one thing a failed refresh
+ * must never be allowed to look like.
+ */
+internal val LogViewerUiState.showsStaleSnapshotNotice: Boolean
+    get() = refresh is LogViewerRefreshState.Failed && refresh.dismissed
+
+/**
  * Whether the active query's full-result aggregate has arrived yet.
  *
  * The distinction matters because the alternative is worse than a missing number: reusing the
@@ -84,39 +133,6 @@ internal sealed interface LogViewerSummaryState {
     ) : LogViewerSummaryState
 }
 
-/**
- * Which of the three mutually exclusive results the screen body shows.
- *
- * A filtered result with no matches is [Content] with an empty item list — not [Error] — because
- * the search still succeeded.
- */
-@Immutable
-internal sealed interface LogViewerLoadState {
-    /** Initial load in flight: skeleton placeholders only, no fabricated log values. */
-    data object Loading : LogViewerLoadState
-
-    /**
-     * Retryable load failure, presented as a modal dialog over the shell.
-     *
-     * The copy is carried as resolved strings because this milestone only ever produces the state
-     * from fixtures; Roadmap #5 replaces it with a typed failure mapped at the screen boundary.
-     */
-    data class Error(
-        val title: String,
-        val message: String,
-    ) : LogViewerLoadState
-
-    /**
-     * A rendered result set. [items] is the flattened header/row list; it is empty when the active
-     * query matches nothing, in which case [severitySummary] reports zero counts.
-     *
-     * [resultCount] is the raw total the query matched, not `items.size` — the screen formats it,
-     * and it describes the whole dataset rather than the rows currently materialized.
-     */
-    @Immutable
-    data class Content(
-        val resultCount: Int,
-        val severitySummary: SeveritySummaryUi,
-        val items: List<LogViewerListItem>,
-    ) : LogViewerLoadState
-}
+/** The complete filtered result is empty, and counted — not merely uncounted so far. */
+internal val LogViewerUiState.hasNoMatches: Boolean
+    get() = summary is LogViewerSummaryState.Ready && summary.summary.totalLogCount == 0

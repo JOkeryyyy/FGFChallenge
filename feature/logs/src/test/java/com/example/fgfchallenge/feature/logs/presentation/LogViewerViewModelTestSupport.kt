@@ -12,6 +12,7 @@ import com.example.fgfchallenge.feature.logs.data.model.LogQuery
 import com.example.fgfchallenge.feature.logs.data.model.LogSummary
 import com.example.fgfchallenge.feature.logs.data.model.Severity
 import com.example.fgfchallenge.feature.logs.data.repository.LogsRepository
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.BufferOverflow
@@ -59,6 +60,32 @@ internal class FakeLogsRepository : LogsRepository {
     /** Rows the paged stream serves for a query. The default is an empty result set. */
     var rowsFor: (LogQuery) -> List<LogEntry> = { emptyList() }
 
+    /** How many launch refreshes have been requested, so retries can be counted. */
+    var refreshCount: Int = 0
+        private set
+
+    var refreshResult: EmptyResult<LogsDataError> = Result.Success(Unit)
+
+    /**
+     * Held open, a refresh never finishes — which is the only way to observe the in-progress state,
+     * since an immediately-returning fake has already resolved before a test can look.
+     */
+    var refreshGate: CompletableDeferred<Unit>? = null
+
+    /**
+     * What the details lookup can resolve, by ID. Deliberately independent of [rowsFor]: the point
+     * of looking a log up by ID is that it works for rows no page currently holds.
+     */
+    val storedById = mutableMapOf<String, LogEntry>()
+
+    /** Every ID the details lookup was asked for, so a cancelled lookup can be told from no lookup. */
+    val logByIdRequests = mutableListOf<String>()
+
+    var logByIdFails: Boolean = false
+
+    /** Held open, a lookup never resolves — which is how a superseded one can be caught arriving. */
+    var logByIdGate: CompletableDeferred<Unit>? = null
+
     /**
      * One replayed channel per query, created on demand.
      *
@@ -68,7 +95,11 @@ internal class FakeLogsRepository : LogsRepository {
      */
     private val summaryFlows = mutableMapOf<LogQuery, MutableSharedFlow<LogSummary>>()
 
-    override suspend fun refreshSnapshot(): EmptyResult<LogsDataError> = Result.Success(Unit)
+    override suspend fun refreshSnapshot(): EmptyResult<LogsDataError> {
+        refreshCount++
+        refreshGate?.await()
+        return refreshResult
+    }
 
     override fun pagedLogs(query: LogQuery): Flow<PagingData<LogEntry>> {
         pagedQueries += query
@@ -96,8 +127,16 @@ internal class FakeLogsRepository : LogsRepository {
         options.value = value
     }
 
-    override suspend fun logById(id: String): Result<LogEntry?, LogsDataError> =
-        Result.Success(rowsFor(LogQuery()).firstOrNull { it.id == id })
+    override suspend fun logById(id: String): Result<LogEntry?, LogsDataError> {
+        logByIdRequests += id
+        logByIdGate?.await()
+        return if (logByIdFails) Result.Error(LogsDataError) else Result.Success(storedById[id])
+    }
+
+    /** Makes [entries] resolvable by ID without putting them in any page. */
+    fun store(vararg entries: LogEntry) {
+        entries.forEach { storedById[it.id] = it }
+    }
 
     /** Publishes [summary] to whichever collection is reading [query]. */
     fun emitSummary(
@@ -129,14 +168,15 @@ internal fun testLogEntry(
     id: String,
     severity: Severity = Severity.INFO,
     message: String = "message $id",
+    timestamp: String = "2025-05-22T17:11:58.123Z",
 ): LogEntry =
     LogEntry(
         id = id,
-        timestamp = Instant.parse("2025-05-22T17:11:58.123Z"),
+        timestamp = Instant.parse(timestamp),
         severity = severity,
         tag = "network",
         message = message,
         latencyMs = 128,
         isAiGenerated = false,
-        sessionId = LogViewerFixtures.SESSION_ID,
+        sessionId = "sess-7f3a9b21-7cd4-4d6d-9a12-3f5e7d9a1b2c",
     )

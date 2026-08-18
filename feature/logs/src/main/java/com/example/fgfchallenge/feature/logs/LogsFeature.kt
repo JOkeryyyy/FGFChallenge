@@ -7,10 +7,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.paging.compose.collectAsLazyPagingItems
 import com.example.fgfchallenge.core.designsystem.theme.FGFChallengeTheme
 import com.example.fgfchallenge.feature.logs.presentation.LogViewerFixture
 import com.example.fgfchallenge.feature.logs.presentation.LogViewerScreen
 import com.example.fgfchallenge.feature.logs.presentation.LogViewerViewModel
+import com.example.fgfchallenge.feature.logs.presentation.logViewerFixtureItems
 import com.example.fgfchallenge.feature.logs.presentation.logViewerFixtureState
 
 /**
@@ -24,16 +26,19 @@ import com.example.fgfchallenge.feature.logs.presentation.logViewerFixtureState
  * host activity is `@AndroidEntryPoint`, so its default factory already is Hilt's — this avoids
  * pulling in `hilt-navigation-compose` for a prototype that has no navigation graph.
  *
- * The result set is still fixture-backed, so query text and sort order are recorded without
- * changing rows; the alternate screen states remain reachable through this file's previews rather
- * than an in-app selector.
+ * The two streams are collected differently on purpose: bounded state through
+ * `collectAsStateWithLifecycle`, and the paged rows through `collectAsLazyPagingItems`, which keeps
+ * Paging in charge of what is materialized. The alternate screen states remain reachable through
+ * this file's previews rather than an in-app selector.
  */
 @Composable
 fun LogsFeature(modifier: Modifier = Modifier) {
     val viewModel = viewModel<LogViewerViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val logs = viewModel.pagedLogs.collectAsLazyPagingItems()
     LogViewerScreen(
         state = state,
+        logs = logs,
         onAction = viewModel::onAction,
         modifier = modifier,
     )
@@ -47,6 +52,7 @@ private fun LogViewerFixturePreview(
     FGFChallengeTheme(darkTheme = darkTheme) {
         LogViewerScreen(
             state = logViewerFixtureState(fixture),
+            logs = logViewerFixtureItems(fixture),
             onAction = {},
         )
     }
@@ -102,3 +108,19 @@ private fun PopulatedContentNarrowPreview() = LogViewerFixturePreview(LogViewerF
 @Preview(name = "Populated 760dp", widthDp = 760, heightDp = 900)
 @Composable
 private fun PopulatedContentWidePreview() = LogViewerFixturePreview(LogViewerFixture.AllLogs, darkTheme = false)
+
+@Preview(name = "Stale snapshot light", widthDp = 360, heightDp = 640)
+@Composable
+private fun StaleSnapshotLightPreview() = LogViewerFixturePreview(LogViewerFixture.StaleSnapshot, darkTheme = false)
+
+@Preview(name = "Stale snapshot dark", widthDp = 360, heightDp = 640, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun StaleSnapshotDarkPreview() = LogViewerFixturePreview(LogViewerFixture.StaleSnapshot, darkTheme = true)
+
+@Preview(name = "Append progress 360dp", widthDp = 360, heightDp = 640)
+@Composable
+private fun AppendLoadingPreview() = LogViewerFixturePreview(LogViewerFixture.AppendLoading, darkTheme = false)
+
+@Preview(name = "Append retry 360dp", widthDp = 360, heightDp = 640)
+@Composable
+private fun AppendErrorPreview() = LogViewerFixturePreview(LogViewerFixture.AppendError, darkTheme = false)

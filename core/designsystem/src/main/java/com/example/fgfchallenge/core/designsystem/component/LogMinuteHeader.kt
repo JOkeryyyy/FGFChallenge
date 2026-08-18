@@ -16,15 +16,20 @@ import com.example.fgfchallenge.core.designsystem.theme.FGFChallengeTheme
 import com.example.fgfchallenge.core.designsystem.token.Spacing
 
 /**
- * Static UTC-minute group heading with its entry count. Deliberately non-interactive: the
- * wireframe specifies static, non-collapsible minute groups, so this carries no collapse
- * affordance and no state of its own.
+ * Static UTC-minute group heading. Deliberately non-interactive: the wireframe specifies static,
+ * non-collapsible minute groups, so this carries no collapse affordance and no state of its own.
+ *
+ * [itemCount] is optional because a caller that streams its rows cannot always know it. A paged
+ * list only ever holds part of the result, so the number of entries in a minute is unknown until
+ * that whole minute happens to be loaded — and a count taken from the loaded window would change
+ * as the user scrolls. Such a caller passes `null` and the header renders the minute alone; a
+ * caller holding the complete group passes its size.
  */
 @Composable
 fun LogMinuteHeader(
     minute: String,
-    itemCount: Int,
     modifier: Modifier = Modifier,
+    itemCount: Int? = null,
 ) {
     Row(
         modifier =
@@ -40,12 +45,14 @@ fun LogMinuteHeader(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.semantics { heading() },
         )
-        Text(
-            text = "· $itemCount",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
-        )
+        if (itemCount != null) {
+            Text(
+                text = "· $itemCount",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 
@@ -54,5 +61,13 @@ fun LogMinuteHeader(
 private fun LogMinuteHeaderStaticPreview() {
     FGFChallengeTheme {
         LogMinuteHeader(minute = "17:11", itemCount = 12)
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F9FAL)
+@Composable
+private fun LogMinuteHeaderWithoutCountPreview() {
+    FGFChallengeTheme {
+        LogMinuteHeader(minute = "17:11")
     }
 }
