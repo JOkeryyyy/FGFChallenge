@@ -16,6 +16,7 @@ build/
 .cxx
 local.properties
 **/superpowers/plans/
+.worktrees/
 .claude/
 # Local Macrobenchmark evidence: JSON and Perfetto traces from a physical-device run.
 # The protocol and the per-run template stay tracked under documentation/.

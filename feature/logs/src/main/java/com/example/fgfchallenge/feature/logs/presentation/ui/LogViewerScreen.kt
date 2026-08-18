@@ -1,18 +1,14 @@
 package com.example.fgfchallenge.feature.logs.presentation.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -22,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
@@ -30,7 +25,6 @@ import androidx.paging.compose.LazyPagingItems
 import com.example.fgfchallenge.core.designsystem.component.ErrorDialog
 import com.example.fgfchallenge.core.designsystem.component.LoadingContent
 import com.example.fgfchallenge.core.designsystem.component.LogDetailsSheet
-import com.example.fgfchallenge.core.designsystem.component.LogRow
 import com.example.fgfchallenge.core.designsystem.token.Dimens
 import com.example.fgfchallenge.core.designsystem.token.Spacing
 import com.example.fgfchallenge.feature.logs.R
