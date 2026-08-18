@@ -2,6 +2,11 @@
 
 - Date: 2026-08-18
 - Tool: Codex
+- Task: Relocate the Logs data layer, its unit tests, and benchmark refresh variants into `:feature:logs:data` without changing behavior.
+- Key prompt: Move the complete Logs data implementation and benchmark-specific source sets into the new data module, expose only the approved repository/model/result contract, preserve the old feature as a temporary presentation bridge, record a tests-before-production compilation failure, and retain benchmark test-host wiring.
+
+- Date: 2026-08-18
+- Tool: Codex
 - Task: Establish the temporary two-module Gradle skeleton for the approved Logs data/presentation module split.
 - Key prompt: Create independently configurable `:feature:logs:data` and `:feature:logs:presentation` Android-library skeletons, retain the legacy `:feature:logs` migration bridge, record the required missing-project configuration failure before adding module scripts, and do not migrate sources or modify `:app`.
 

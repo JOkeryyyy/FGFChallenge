@@ -12,7 +12,7 @@ import java.time.Instant
  * trimming search text, rejecting reversed ranges, collapsing a full-width latency selection to
  * `null` — belongs to the domain query policy, not here.
  */
-internal data class LogQuery(
+data class LogQuery(
     /** Matched as a case-insensitive literal substring of `message` or `id`. Blank is inactive. */
     val literalSearch: String = "",
     val selectedTags: Set<String> = emptySet(),
@@ -38,7 +38,7 @@ internal data class LogQuery(
  * The returned value is a criteria key, not a query to page with: its [LogQuery.sortDirection] is
  * canonical rather than the user's, and only the count select may be built from it.
  */
-internal fun LogQuery.aggregateCriteria(): LogQuery = copy(sortDirection = LogSortDirection.NewestFirst)
+fun LogQuery.aggregateCriteria(): LogQuery = copy(sortDirection = LogSortDirection.NewestFirst)
 
 /**
  * Direction of the deterministic timestamp-then-ID ordering every select applies.
@@ -46,7 +46,7 @@ internal fun LogQuery.aggregateCriteria(): LogQuery = copy(sortDirection = LogSo
  * This is the data layer's own type rather than presentation's `LogSortOrder`: the repository
  * contract cannot depend on presentation, and the two are mapped where the query is assembled.
  */
-internal enum class LogSortDirection {
+enum class LogSortDirection {
     NewestFirst,
     OldestFirst,
 }

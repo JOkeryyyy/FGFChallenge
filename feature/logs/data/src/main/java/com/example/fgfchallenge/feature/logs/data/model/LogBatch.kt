@@ -29,7 +29,7 @@ internal data class LogBatch(
  * row buys nothing. [sessionId] comes from the response envelope and is carried on every entry so
  * a details lookup by ID needs no second read.
  */
-internal data class LogEntry(
+data class LogEntry(
     val id: String,
     val timestamp: Instant,
     val severity: Severity,
@@ -44,7 +44,7 @@ internal data class LogEntry(
  * The five severities the supplied dataset uses, plus [UNKNOWN] for forward compatibility with
  * values the payload may introduce later.
  */
-internal enum class Severity {
+enum class Severity {
     DEBUG,
     INFO,
     WARN,

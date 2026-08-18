@@ -5,7 +5,7 @@ package com.example.fgfchallenge.feature.logs.data.model
  * loaded. Presentation derives its result count and `(ERROR + FATAL) / total` density from these
  * values; the loaded-item count is never a substitute.
  */
-internal data class LogSummary(
+data class LogSummary(
     val totalCount: Int = 0,
     /**
      * Contains all five known severities, zero-valued when absent, so the legend does not change
@@ -19,7 +19,7 @@ internal data class LogSummary(
  * Unfiltered metadata about the whole snapshot, used to populate the filter controls before any
  * filter is applied. It is derived with aggregate selects rather than by reading every row.
  */
-internal data class LogFilterOptions(
+data class LogFilterOptions(
     val availableTags: List<String> = emptyList(),
     /** Both are null while no snapshot is stored, which the UI shows as an unavailable range. */
     val minimumLatencyMs: Long? = null,
@@ -30,7 +30,7 @@ internal data class LogFilterOptions(
  * The severities the product exposes as filter choices and legend rows. [Severity.UNKNOWN] is
  * deliberately excluded: it is a storage fallback, not a value users select.
  */
-internal val KNOWN_SEVERITIES: List<Severity> =
+val KNOWN_SEVERITIES: List<Severity> =
     listOf(
         Severity.DEBUG,
         Severity.INFO,

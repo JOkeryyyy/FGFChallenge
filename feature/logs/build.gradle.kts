@@ -65,6 +65,8 @@ tasks.withType<Test>().configureEach {
 }
 
 dependencies {
+    // Temporary bridge while presentation remains in this legacy module; Task 3 moves it.
+    implementation(projects.feature.logs.data)
     implementation(projects.core.network)
     implementation(projects.core.designsystem)
     implementation(platform(libs.androidx.compose.bom))

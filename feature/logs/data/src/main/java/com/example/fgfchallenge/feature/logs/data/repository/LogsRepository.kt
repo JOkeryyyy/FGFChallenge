@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.Flow
  * Room, so a successful refresh invalidates all of them at once and no in-memory cache can compete
  * with the database.
  */
-internal interface LogsRepository {
+interface LogsRepository {
     /**
      * Fetches the complete remote snapshot and atomically replaces the stored one.
      *
