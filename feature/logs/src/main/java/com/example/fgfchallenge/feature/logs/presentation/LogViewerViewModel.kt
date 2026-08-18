@@ -11,15 +11,11 @@ import com.example.fgfchallenge.feature.logs.data.model.LogEntry
 import com.example.fgfchallenge.feature.logs.data.model.LogQuery
 import com.example.fgfchallenge.feature.logs.data.model.aggregateCriteria
 import com.example.fgfchallenge.feature.logs.data.repository.LogsRepository
-import com.example.fgfchallenge.feature.logs.presentation.model.LogFilterSelection
 import com.example.fgfchallenge.feature.logs.presentation.model.LogViewerListItem
 import com.example.fgfchallenge.feature.logs.presentation.model.minuteHeaderBetween
 import com.example.fgfchallenge.feature.logs.presentation.model.toListItem
 import com.example.fgfchallenge.feature.logs.presentation.model.toLogDetailsUi
 import com.example.fgfchallenge.feature.logs.presentation.model.toSeveritySummaryUi
-import com.example.fgfchallenge.feature.logs.presentation.model.toggleSeverity
-import com.example.fgfchallenge.feature.logs.presentation.model.toggleTag
-import com.example.fgfchallenge.feature.logs.presentation.model.utcDateOf
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -36,7 +32,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.LocalTime
 import javax.inject.Inject
 
 /**
@@ -56,10 +51,11 @@ import javax.inject.Inject
  * the snapshot or by the number of matches — not the state, not the details lookup, not the
  * transformation that groups rows into minutes.
  *
- * It also owns the filter sheet's *draft*, not just the applied filters. The sheet is a stateless
- * design-system component that reports chip taps and picker results and re-renders whatever it is
- * handed back, so a half-composed filter set lives in one place, survives configuration changes with
- * the rest of the state, and reaches the query only when Apply says so.
+ * It owns the *applied* filters and not the filter sheet's draft. The draft belongs to
+ * `LogFilterSheetHost`, because holding it here published a new [LogViewerUiState] for every chip tap
+ * and every frame of a latency drag — recomposing the screen and its row list for a value neither
+ * renders. What arrives here instead is one [LogViewerAction.FiltersApplied] carrying the finished
+ * selection, which is also the only point a filter set is allowed to reach the query.
  */
 @HiltViewModel
 internal class LogViewerViewModel
@@ -95,10 +91,11 @@ internal class LogViewerViewModel
         /**
          * The active criteria, derived from state and de-duplicated.
          *
-         * [distinctUntilChanged] is what keeps selecting a row, editing the filter draft, or
-         * dismissing a sheet from restarting the database work: those change [state] but not the
-         * query. It also means a search that normalizes to the same value — trailing whitespace,
-         * say — re-uses the running queries instead of discarding their results.
+         * [distinctUntilChanged] is what keeps selecting a row, opening the filter sheet, or
+         * dismissing one from restarting the database work: those change [state] but not the query.
+         * It is also what makes re-applying an unchanged filter selection free, and means a search
+         * that normalizes to the same value — trailing whitespace, say — re-uses the running queries
+         * instead of discarding their results.
          *
          * The settled search text is substituted back into the state *before* the query is derived,
          * rather than copied over the derived query, so [activeLogQuery] stays the single place that
@@ -200,73 +197,25 @@ internal class LogViewerViewModel
                     _state.update { it.copy(selectedLog = null) }
                 }
 
-                // Opening starts the draft from what is currently applied, so the sheet always
-                // shows the filters the visible rows were produced with.
+                // Visibility only. The sheet seeds its own edit from the applied filters when it
+                // opens, so the filters the visible rows were produced with are still what it shows.
                 LogViewerAction.FilterSheetOpened -> {
-                    _state.update { it.copy(filterDraft = it.filters) }
+                    _state.update { it.copy(isFilterSheetOpen = true) }
                 }
 
                 // Dismissing without applying discards the edit; the applied filters are untouched,
                 // so nothing the user was reading changes underneath them.
                 LogViewerAction.FilterSheetDismissed -> {
-                    _state.update { it.copy(filterDraft = null) }
-                }
-
-                is LogViewerAction.FilterTagToggled -> {
-                    updateFilterDraft { it.toggleTag(action.tag) }
-                }
-
-                is LogViewerAction.FilterSeverityToggled -> {
-                    updateFilterDraft { it.toggleSeverity(action.severity) }
-                }
-
-                is LogViewerAction.FilterAiGeneratedChanged -> {
-                    updateFilterDraft { it.copy(aiGenerated = action.choice) }
-                }
-
-                // The pickers report UTC epoch milliseconds; turning them into calendar dates is a
-                // UTC rule, so it happens here rather than in the sheet.
-                is LogViewerAction.FilterDateRangeChanged -> {
-                    updateFilterDraft {
-                        it.copy(
-                            startDateUtc = action.startUtcMillis?.let(::utcDateOf),
-                            endDateUtc = action.endUtcMillis?.let(::utcDateOf),
-                        )
-                    }
-                }
-
-                is LogViewerAction.FilterStartTimeChanged -> {
-                    updateFilterDraft {
-                        it.copy(startTimeUtc = LocalTime.of(action.hourOfDayUtc, action.minuteOfHourUtc))
-                    }
-                }
-
-                is LogViewerAction.FilterEndTimeChanged -> {
-                    updateFilterDraft {
-                        it.copy(endTimeUtc = LocalTime.of(action.hourOfDayUtc, action.minuteOfHourUtc))
-                    }
-                }
-
-                is LogViewerAction.FilterLatencyRangeChanged -> {
-                    updateFilterDraft {
-                        it.copy(minimumLatencyMs = action.minimumMs, maximumLatencyMs = action.maximumMs)
-                    }
+                    _state.update { it.copy(isFilterSheetOpen = false) }
                 }
 
                 // The one filter action that reaches the query. It goes through `updateQueryInputs`
                 // like every other criteria change, so applying a filter drops a summary counted for
-                // the previous criteria in the same state value.
-                LogViewerAction.FiltersApplied -> {
-                    updateQueryInputs { current ->
-                        val draft = current.filterDraft ?: return@updateQueryInputs current
-                        current.copy(filters = draft, filterDraft = null)
-                    }
-                }
-
-                // Clear All resets the draft and leaves the sheet open: it is an edit like any
-                // other, and the roadmap's rule is that nothing queries the database until Apply.
-                LogViewerAction.FiltersCleared -> {
-                    updateFilterDraft { LogFilterSelection() }
+                // the previous criteria in the same state value. Re-applying an unchanged selection
+                // is not special-cased here: it derives the same `LogQuery`, which `activeQuery`
+                // drops as a duplicate, so nothing restarts.
+                is LogViewerAction.FiltersApplied -> {
+                    updateQueryInputs { it.copy(filters = action.selection, isFilterSheetOpen = false) }
                 }
 
                 // Retry re-runs the launch refresh, and only that. The query, filters, and sort are
@@ -329,22 +278,6 @@ internal class LogViewerViewModel
                     val entry = (repository.logById(logId) as? Result.Success)?.data ?: return@launch
                     _state.update { it.copy(selectedLog = entry.toLogDetailsUi()) }
                 }
-        }
-
-        /**
-         * Edits the open draft, and does nothing when no sheet is open.
-         *
-         * The null check is not defensive padding: a control can report a change as the sheet is
-         * being dismissed, and reopening a sheet the user just closed — or resurrecting a draft they
-         * discarded — is worse than dropping that last edit. Nothing here touches
-         * [LogViewerUiState.filters], which is what keeps a half-composed filter set away from the
-         * database.
-         */
-        private fun updateFilterDraft(transform: (LogFilterSelection) -> LogFilterSelection) {
-            _state.update { current ->
-                val draft = current.filterDraft ?: return@update current
-                current.copy(filterDraft = transform(draft))
-            }
         }
 
         /**

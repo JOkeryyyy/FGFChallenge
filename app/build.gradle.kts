@@ -50,6 +50,7 @@ dependencies {
     implementation(projects.feature.logs)
     implementation(projects.core.designsystem)
     implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.runtime.tracing)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.ui)

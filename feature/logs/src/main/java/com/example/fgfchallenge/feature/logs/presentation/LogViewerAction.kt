@@ -1,7 +1,6 @@
 package com.example.fgfchallenge.feature.logs.presentation
 
-import com.example.fgfchallenge.feature.logs.data.model.Severity
-import com.example.fgfchallenge.feature.logs.presentation.model.AiGeneratedFilter
+import com.example.fgfchallenge.feature.logs.presentation.model.LogFilterSelection
 
 /**
  * Every user input the log viewer accepts, dispatched through the screen's single `onAction`
@@ -11,9 +10,10 @@ import com.example.fgfchallenge.feature.logs.presentation.model.AiGeneratedFilte
  * the only place that decides what an interaction means. Selection travels as a log ID because the
  * ViewModel owns the row data the details are resolved from.
  *
- * The filter entries are the clearest case of that split: a chip tap reports the chip, not the
- * resulting selection, and none of them says whether the change reaches the query — only
- * [FiltersApplied] does that.
+ * The filter entries are the clearest case of that split, and of its limit. Opening and dismissing
+ * the sheet are reported here because they are screen-level visibility; the edits inside it are not,
+ * because nothing outside the sheet renders a half-composed filter set. Only [FiltersApplied]
+ * reaches the query.
  */
 internal sealed interface LogViewerAction {
     /** Search text changed, including the search field's clear button emitting an empty query. */
@@ -35,56 +35,24 @@ internal sealed interface LogViewerAction {
     /** The sort control was tapped; the ViewModel decides which order follows the current one. */
     data object SortOrderToggled : LogViewerAction
 
-    /** The Filter control was tapped, which starts a draft from the filters currently applied. */
+    /** The Filter control was tapped, which shows the sheet over the current rows. */
     data object FilterSheetOpened : LogViewerAction
 
-    /** The filter sheet was dismissed by swipe, Back, or an outside tap, discarding the draft. */
+    /** The filter sheet was dismissed by swipe, Back, or an outside tap, discarding the edit. */
     data object FilterSheetDismissed : LogViewerAction
 
-    /** A tag chip was tapped; the ViewModel decides whether that selects or deselects it. */
-    data class FilterTagToggled(
-        val tag: String,
-    ) : LogViewerAction
-
-    data class FilterSeverityToggled(
-        val severity: Severity,
-    ) : LogViewerAction
-
-    data class FilterAiGeneratedChanged(
-        val choice: AiGeneratedFilter,
-    ) : LogViewerAction
-
     /**
-     * The date-range picker was confirmed. The bounds stay UTC epoch milliseconds this far because
-     * the conversion into calendar dates is a UTC rule, and those live with the query policy rather
-     * than in a composable. Either bound may be `null`, which leaves that side of the range open.
+     * Apply: the sheet's finished selection becomes the applied filters, and only now does the query
+     * change.
+     *
+     * It carries the whole selection rather than reporting each chip and picker, because the edit
+     * itself belongs to `LogFilterSheetHost` — the individual taps never reach the ViewModel, which
+     * is what keeps a filter session from recomposing the screen once per interaction. Clear All is
+     * likewise absent: it resets the sheet's own edit and commits nothing.
      */
-    data class FilterDateRangeChanged(
-        val startUtcMillis: Long?,
-        val endUtcMillis: Long?,
+    data class FiltersApplied(
+        val selection: LogFilterSelection,
     ) : LogViewerAction
-
-    data class FilterStartTimeChanged(
-        val hourOfDayUtc: Int,
-        val minuteOfHourUtc: Int,
-    ) : LogViewerAction
-
-    data class FilterEndTimeChanged(
-        val hourOfDayUtc: Int,
-        val minuteOfHourUtc: Int,
-    ) : LogViewerAction
-
-    /** Both latency bounds are inclusive, and both arrive together from the one range control. */
-    data class FilterLatencyRangeChanged(
-        val minimumMs: Long,
-        val maximumMs: Long,
-    ) : LogViewerAction
-
-    /** Apply: the draft becomes the applied filters, and only now does the query change. */
-    data object FiltersApplied : LogViewerAction
-
-    /** Clear All: the draft returns to no filters, still uncommitted until Apply. */
-    data object FiltersCleared : LogViewerAction
 
     /** Retry on the error dialog. */
     data object RetryClicked : LogViewerAction

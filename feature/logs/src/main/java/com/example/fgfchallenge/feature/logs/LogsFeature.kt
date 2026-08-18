@@ -9,6 +9,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.example.fgfchallenge.core.designsystem.theme.FGFChallengeTheme
+import com.example.fgfchallenge.feature.logs.presentation.LogFilterSheetHost
+import com.example.fgfchallenge.feature.logs.presentation.LogViewerAction
 import com.example.fgfchallenge.feature.logs.presentation.LogViewerFixture
 import com.example.fgfchallenge.feature.logs.presentation.LogViewerScreen
 import com.example.fgfchallenge.feature.logs.presentation.LogViewerViewModel
@@ -30,6 +32,13 @@ import com.example.fgfchallenge.feature.logs.presentation.logViewerFixtureState
  * `collectAsStateWithLifecycle`, and the paged rows through `collectAsLazyPagingItems`, which keeps
  * Paging in charge of what is materialized. The alternate screen states remain reachable through
  * this file's previews rather than an in-app selector.
+ *
+ * The filter sheet is composed here as the screen's *sibling* rather than from inside it, and that
+ * placement is load-bearing. `LogFilterSheetHost` owns the uncommitted edit, so a chip tap or a
+ * latency drag recomposes only the host: this function re-runs, but `state` and `logs` are the same
+ * instances it was already holding, so `LogViewerScreen` skips — and with it the `Scaffold`, the
+ * summary card, and the row list. Composing the sheet inside the screen would put the edit back in
+ * the screen's own scope and undo that.
  */
 @Composable
 fun LogsFeature(modifier: Modifier = Modifier) {
@@ -42,6 +51,14 @@ fun LogsFeature(modifier: Modifier = Modifier) {
         onAction = viewModel::onAction,
         modifier = modifier,
     )
+    if (state.isFilterSheetOpen) {
+        LogFilterSheetHost(
+            appliedFilters = state.filters,
+            options = state.filterOptions,
+            onApply = { selection -> viewModel.onAction(LogViewerAction.FiltersApplied(selection)) },
+            onDismissRequest = { viewModel.onAction(LogViewerAction.FilterSheetDismissed) },
+        )
+    }
 }
 
 @Composable

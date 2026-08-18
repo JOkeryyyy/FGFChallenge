@@ -409,7 +409,7 @@ The typed `Result<T, E : Error>` and helpers remain feature-local. They are not 
 StateFlow<LogViewerUiState>
     immediate search text
     applied filters
-    filter draft and visibility
+    filter sheet visibility
     active-filter count
     sort direction
     startup refresh state
@@ -424,12 +424,15 @@ Flow<PagingData<LogViewerListItem>>
 
 `LogViewerUiState` never contains `PagingData`, the complete database, every match, or a materialized copy of loaded rows. The separate Paging flow is the deliberate exception to “all screen values in one state object” because Paging owns and evicts its bounded working set.
 
+The filter sheet's *uncommitted draft* is the second deliberate exception, and is owned by `LogFilterSheetHost` rather than by this state object. Holding it here published a new `LogViewerUiState` for every chip tap and every frame of a latency drag, which invalidated the screen, its `Scaffold`, and the row `LazyColumn` for a value none of them render — the draft is read only by the sheet, so it is hoisted only as far as the sheet. What remains in state is the sheet's visibility, because that is a screen-level decision.
+
+The host holds the *mapped* sheet model as its edit state, so one interaction rewrites one control instead of re-deriving every chip and reformatting every label; the expensive mapping runs when the sheet opens and once more on Apply. It keeps that edit in `rememberSaveable`, so it survives configuration change and process death. The host is composed as a sibling of `LogViewerScreen` under the feature root, not from inside the screen, which is what lets the screen skip while a filter session is in progress.
+
 All user input is modelled as `LogViewerAction`, including:
 
 - search text change and clear;
 - open/dismiss filter sheet;
-- edit filter draft;
-- Apply and Clear All;
+- Apply, carrying the sheet's finished selection;
 - sort change;
 - startup Retry and Paging retry;
 - row selection and details dismissal.

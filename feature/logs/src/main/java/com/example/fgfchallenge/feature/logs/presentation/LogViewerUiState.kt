@@ -15,9 +15,12 @@ import com.example.fgfchallenge.feature.logs.presentation.model.latencyExtent
  * Bounded is the defining property. The result rows are not here and never will be — they travel
  * separately as `Flow<PagingData<LogViewerListItem>>`, because Paging owns and evicts its own
  * working set and a state value cannot. What is left is small and fixed in size regardless of how
- * many logs the snapshot holds: the query inputs, the filter sheet's draft, the snapshot metadata
- * its controls are built from, the active query's aggregate, the selected log, and how the launch
- * refresh went.
+ * many logs the snapshot holds: the query inputs, whether each sheet is showing, the snapshot
+ * metadata the filter controls are built from, the active query's aggregate, the selected log, and
+ * how the launch refresh went.
+ *
+ * The filter sheet's uncommitted *draft* is deliberately not among them — it belongs to
+ * `LogFilterSheetHost`, for the recomposition reason recorded on [isFilterSheetOpen].
  *
  * The screen-wide inputs ([query], [filters], [sortOrder], [selectedLog]) sit beside — not inside —
  * [refresh], so a query survives a retry and the details sheet is simply "[selectedLog] is not null"
@@ -41,13 +44,18 @@ internal data class LogViewerUiState(
     /** The filters currently *applied* — the only ones the query is derived from. */
     val filters: LogFilterSelection = LogFilterSelection(),
     /**
-     * The filter sheet's uncommitted draft, and its visibility: the sheet is open exactly while
-     * this is not null, the same way the details sheet is "[selectedLog] is not null".
+     * Whether the filter sheet is showing. Visibility only — the uncommitted draft is not here.
      *
-     * Draft edits deliberately do not reach [filters], so a half-composed filter set never issues a
-     * database query. Apply is what moves this value across; dismissing discards it.
+     * The draft lives in `LogFilterSheetHost`, because nothing outside the sheet renders it and
+     * holding it here made every chip tap and every frame of a latency drag publish a new state
+     * value, invalidating the screen, its `Scaffold`, and the row list for a value none of them
+     * read. What is left is the one bit the screen genuinely owns: whether the sheet is up.
+     *
+     * Apply is still the only path across. It arrives as `FiltersApplied` carrying the finished
+     * selection, so a half-composed filter set never issues a database query; dismissing reports
+     * only itself and leaves [filters] untouched.
      */
-    val filterDraft: LogFilterSelection? = null,
+    val isFilterSheetOpen: Boolean = false,
     /** Unfiltered snapshot metadata the sheet's controls are built from: tags and latency extent. */
     val filterOptions: LogFilterOptions = LogFilterOptions(),
     val sortOrder: LogSortOrder = LogSortOrder.NewestFirst,

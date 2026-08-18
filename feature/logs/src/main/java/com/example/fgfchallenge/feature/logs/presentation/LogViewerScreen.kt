@@ -40,6 +40,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,13 +68,11 @@ import androidx.paging.compose.itemKey
 import com.example.fgfchallenge.core.designsystem.component.ErrorDialog
 import com.example.fgfchallenge.core.designsystem.component.LoadingContent
 import com.example.fgfchallenge.core.designsystem.component.LogDetailsSheet
-import com.example.fgfchallenge.core.designsystem.component.LogFilterSheet
 import com.example.fgfchallenge.core.designsystem.component.LogMinuteHeader
 import com.example.fgfchallenge.core.designsystem.component.LogRow
 import com.example.fgfchallenge.core.designsystem.component.LogSearchField
 import com.example.fgfchallenge.core.designsystem.component.NoResultsContent
 import com.example.fgfchallenge.core.designsystem.component.SeverityIndicator
-import com.example.fgfchallenge.core.designsystem.model.LogFilterSheetEvent
 import com.example.fgfchallenge.core.designsystem.modifier.shimmerEffect
 import com.example.fgfchallenge.core.designsystem.token.Dimens
 import com.example.fgfchallenge.core.designsystem.token.Spacing
@@ -80,13 +80,9 @@ import com.example.fgfchallenge.feature.logs.R
 import com.example.fgfchallenge.feature.logs.presentation.model.LogSortOrder
 import com.example.fgfchallenge.feature.logs.presentation.model.LogViewerListItem
 import com.example.fgfchallenge.feature.logs.presentation.model.SeveritySummaryUi
-import com.example.fgfchallenge.feature.logs.presentation.model.severityFilterFor
 import com.example.fgfchallenge.feature.logs.presentation.model.toDensityUi
-import com.example.fgfchallenge.feature.logs.presentation.model.toFilterSelection
-import com.example.fgfchallenge.feature.logs.presentation.model.toFilterSheetUi
 import java.text.NumberFormat
 import java.util.Locale
-import kotlin.math.roundToLong
 
 /**
  * Held rather than rebuilt per call: the title formats two counts on every recomposition, and the
@@ -162,6 +158,19 @@ internal fun LogViewerScreen(
 ) {
     val focusManager = LocalFocusManager.current
 
+    // Both counts below feed the app bar's title and badge, and both used to be computed inline in
+    // the `topBar` slot — so every recomposition of this screen re-scanned the loaded window and
+    // rebuilt a whole `LogQuery` to count five booleans.
+    //
+    // `derivedStateOf` for the loaded rows because `itemSnapshotList` is snapshot-backed: the scan
+    // re-runs when Paging changes it, and the bar is invalidated only when the number it renders
+    // actually moves — not on every append that leaves the count alone.
+    val loadedRowCount by remember(logs) { derivedStateOf { logs.loadedRowCount() } }
+    // `remember` for the badge because its inputs are plain state fields: the count is re-derived
+    // when the applied filters or the snapshot's extent change, and a search keystroke or an arriving
+    // summary no longer allocates a query to answer a question whose inputs did not move.
+    val activeFilterCount = remember(state.filters, state.filterOptions) { state.activeFilterCount }
+
     Scaffold(
         // Publishes every `testTag` below as an Android resource id, which is the only way an
         // out-of-process tool can address a Compose node. It adds semantics and consumes no input.
@@ -177,8 +186,8 @@ internal fun LogViewerScreen(
         topBar = {
             LogViewerTopBar(
                 summary = state.summary,
-                loadedRowCount = logs.loadedRowCount(),
-                activeFilterCount = state.activeFilterCount,
+                loadedRowCount = loadedRowCount,
+                activeFilterCount = activeFilterCount,
                 sortOrder = state.sortOrder,
                 query = state.query,
                 isSearchExpanded = state.isSearchExpanded,
@@ -225,67 +234,11 @@ internal fun LogViewerScreen(
             onDismissRequest = { onAction(LogViewerAction.DetailsDismissed) },
         )
     }
-    // Same idiom for the filter sheet: it is open exactly while a draft exists, and every edit it
-    // reports goes straight back out as an action. The screen translates between the design system's
-    // vocabulary and the feature's, and decides nothing itself.
-    state.filterDraft?.let { draft ->
-        LogFilterSheet(
-            filters = draft.toFilterSheetUi(state.filterOptions),
-            onEvent = { event -> event.toAction()?.let(onAction) },
-            onDismissRequest = { onAction(LogViewerAction.FilterSheetDismissed) },
-        )
-    }
+    // The filter sheet is deliberately *not* here. It is a sibling of this screen under
+    // `LogsFeature`, so `LogFilterSheetHost` can own the uncommitted edit without every chip tap
+    // publishing a new `LogViewerUiState` and recomposing this whole tree. What reaches this screen
+    // is the applied result, through `LogViewerUiState.filters`.
 }
-
-/**
- * Maps one sheet event to the action it reports.
- *
- * `null` for a severity chip whose ID names no known severity — the sheet cannot produce one, and
- * inventing a filter from an unrecognized value would be worse than ignoring the tap. The latency
- * range crosses back into milliseconds here because the slider's `Float` domain is a control detail
- * and `LogViewerAction` speaks the feature's units.
- */
-private fun LogFilterSheetEvent.toAction(): LogViewerAction? =
-    when (this) {
-        is LogFilterSheetEvent.TagToggled -> {
-            LogViewerAction.FilterTagToggled(id)
-        }
-
-        is LogFilterSheetEvent.SeverityToggled -> {
-            severityFilterFor(id)?.let(LogViewerAction::FilterSeverityToggled)
-        }
-
-        is LogFilterSheetEvent.AiGeneratedSelected -> {
-            LogViewerAction.FilterAiGeneratedChanged(choice.toFilterSelection())
-        }
-
-        is LogFilterSheetEvent.DateRangeSelected -> {
-            LogViewerAction.FilterDateRangeChanged(startUtcMillis, endUtcMillis)
-        }
-
-        is LogFilterSheetEvent.StartTimeSelected -> {
-            LogViewerAction.FilterStartTimeChanged(hourOfDayUtc, minuteOfHourUtc)
-        }
-
-        is LogFilterSheetEvent.EndTimeSelected -> {
-            LogViewerAction.FilterEndTimeChanged(hourOfDayUtc, minuteOfHourUtc)
-        }
-
-        is LogFilterSheetEvent.LatencyRangeSelected -> {
-            LogViewerAction.FilterLatencyRangeChanged(
-                minimumMs = range.start.roundToLong(),
-                maximumMs = range.endInclusive.roundToLong(),
-            )
-        }
-
-        LogFilterSheetEvent.Applied -> {
-            LogViewerAction.FiltersApplied
-        }
-
-        LogFilterSheetEvent.Cleared -> {
-            LogViewerAction.FiltersCleared
-        }
-    }
 
 /**
  * The screen's one persistent control surface: what the query currently matches, and the three
