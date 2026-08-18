@@ -21,6 +21,17 @@ internal sealed interface LogViewerAction {
         val query: String,
     ) : LogViewerAction
 
+    /**
+     * The app bar's search action was tapped while search was collapsed, which reveals the field.
+     *
+     * Visibility only. The text the field is opened onto is whatever [QueryChanged] last reported,
+     * so this neither starts nor widens a search — it is why a collapsed search can still be active.
+     */
+    data object SearchOpened : LogViewerAction
+
+    /** The same action tapped while search was expanded, which hides the field but keeps its text. */
+    data object SearchDismissed : LogViewerAction
+
     /** The sort control was tapped; the ViewModel decides which order follows the current one. */
     data object SortOrderToggled : LogViewerAction
 

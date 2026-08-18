@@ -444,7 +444,8 @@ The UI follows the revised wireframe and remains responsive:
 
 - startup loading uses skeletons with no fabricated log values;
 - startup error offers explicit Retry;
-- content keeps the full-result summary, search, Filter with active count, and sort visible;
+- a pinned Material 3 small top app bar is titled with the loaded row count and the full-result total together, and carries the filter entry with its active-category badge, search, and the sort toggle; the search field expands beneath it on demand and keeps its text when collapsed;
+- content keeps the full-result summary visible above the list;
 - the filter modal edits tags, five known severities, AI Any/Yes/No, UTC date/time, and inclusive latency draft values, then applies them together;
 - one flat `LazyColumn` renders paging-aware stable keys and content types;
 - non-collapsible UTC minute headers are inserted across page boundaries;
@@ -457,7 +458,7 @@ Paging transformation maps `LogEntry` to `LogRowUi` and uses separator insertion
 
 The Canvas severity indicator has a neutral circular track plus ERROR and FATAL arcs. Its percentage and adjacent legend come from the complete-result aggregate. Text labels ensure color is not the only carrier of meaning.
 
-Use clear visible labels for controls and load-state actions. One representative screenshot test per screen is sufficient.
+Load-state actions carry visible labels. App bar controls are icons, so each carries a text label for assistive technology instead: the filter action states how many categories are active, the search action states whether a collapsed search is still narrowing the result, and the sort action states both the order in effect and the one a tap produces. One representative screenshot test per screen is sufficient.
 
 ## Time and display formatting
 

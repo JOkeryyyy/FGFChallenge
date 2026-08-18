@@ -1,6 +1,7 @@
 package com.example.fgfchallenge.feature.logs.presentation
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -125,8 +126,55 @@ class LogViewerScreenInteractionTest {
     }
 
     @Test
-    fun typingReportsTheQuery() {
+    fun searchActionExpandsTheField() {
         setScreen(LogViewerFixture.AllLogs)
+
+        // Collapsed, the field is not merely hidden behind something — it is not composed at all.
+        composeTestRule.onNodeWithText("Search message or log ID").assertDoesNotExist()
+
+        composeTestRule.onNodeWithContentDescription("Search logs").performClick()
+
+        assertThat(actions).containsExactly(LogViewerAction.SearchOpened)
+    }
+
+    @Test
+    fun theExpandedFieldIsShownFocusedAndCloseable() {
+        setScreen(LogViewerFixture.SearchExpanded)
+
+        // Autofocus is what makes hiding the field affordable: the tap that opened it is the same
+        // intent as the tap that would have selected it.
+        composeTestRule.onNodeWithText("Search message or log ID").assertIsFocused()
+        composeTestRule.onNodeWithContentDescription("Close search").performClick()
+
+        assertThat(actions).containsExactly(LogViewerAction.SearchDismissed)
+    }
+
+    @Test
+    fun aCollapsedSearchStillReportsItsText() {
+        // FilteredEmpty carries search text with the field collapsed, which is the state the
+        // indicator exists for: the result is narrowed by a search that is out of sight.
+        setScreen(LogViewerFixture.FilteredEmpty)
+
+        composeTestRule.onNodeWithContentDescription("Search logs, search active").assertIsDisplayed()
+        composeTestRule.onNodeWithText("kubernetes").assertDoesNotExist()
+        assertThat(actions).isEmpty()
+    }
+
+    @Test
+    fun theExpandedFieldKeepsTheQueryItWasOpenedOnto() {
+        setScreen(
+            LogViewerFixture.SearchExpanded,
+            state = LogViewerFixtures.searchExpandedState().copy(query = "timeout"),
+        )
+
+        composeTestRule.onNodeWithText("timeout").assertIsDisplayed()
+        // Expanding is a visibility change and nothing else, so it reports no query of its own.
+        assertThat(actions).isEmpty()
+    }
+
+    @Test
+    fun typingReportsTheQuery() {
+        setScreen(LogViewerFixture.SearchExpanded)
 
         // performTextInput commits the whole string as one IME edit, so this asserts that the field
         // reports what was typed, not that it reports once per character.
@@ -137,9 +185,12 @@ class LogViewerScreenInteractionTest {
 
     @Test
     fun clearingTheSearchFieldReportsAnEmptyQuery() {
-        // The fixture with search text in the field: the clear button only exists while a query is
-        // present, and `Filtered` is narrowed by a structured filter rather than by typing.
-        setScreen(LogViewerFixture.FilteredEmpty)
+        // The clear button only exists while a query is present, so the expanded field is opened
+        // onto the text that puts it there.
+        setScreen(
+            LogViewerFixture.SearchExpanded,
+            state = LogViewerFixtures.searchExpandedState().copy(query = "kubernetes"),
+        )
 
         composeTestRule.onNodeWithContentDescription("Clear search").performClick()
 
@@ -147,22 +198,53 @@ class LogViewerScreenInteractionTest {
     }
 
     @Test
+    fun filterActionOpensTheSheet() {
+        setScreen(LogViewerFixture.AllLogs)
+
+        composeTestRule.onNodeWithContentDescription("Filter").performClick()
+
+        assertThat(actions).containsExactly(LogViewerAction.FilterSheetOpened)
+    }
+
+    @Test
+    fun filterActionAnnouncesHowManyFiltersAreActive() {
+        // `Filtered` applies one structured filter, which is what puts the badge on the icon; the
+        // count is folded into the label rather than announced as a bare number beside it.
+        setScreen(LogViewerFixture.Filtered)
+
+        composeTestRule.onNodeWithContentDescription("Filter, 1 active filter").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Filter").assertDoesNotExist()
+    }
+
+    @Test
     fun sortControlReportsAToggle() {
         setScreen(LogViewerFixture.AllLogs)
 
-        composeTestRule.onNodeWithText("Newest first").performClick()
+        composeTestRule.onNodeWithContentDescription("Sorted newest first. Change to oldest first.").performClick()
 
         assertThat(actions).containsExactly(LogViewerAction.SortOrderToggled)
     }
 
     @Test
-    fun sortControlShowsTheActiveOrder() {
+    fun sortControlNamesTheActiveAndNextOrder() {
         setScreen(
             LogViewerFixture.AllLogs,
             state = LogViewerFixtures.allLogsState().copy(sortOrder = LogSortOrder.OldestFirst),
         )
 
-        composeTestRule.onNodeWithText("Oldest first").assertIsDisplayed()
+        // One icon in both directions, so the label is the only thing that says which order is in
+        // effect — and, just as importantly, which one a tap produces.
+        composeTestRule.onNodeWithContentDescription("Sorted oldest first. Change to newest first.").assertIsDisplayed()
+    }
+
+    @Test
+    fun theTitleReportsLoadedRowsOfMatchingRows() {
+        setScreen(LogViewerFixture.AllLogs)
+
+        // Two numbers from two sources: the loaded figure counts the rows Paging holds — eleven,
+        // excluding the three inserted minute headers — and the total is the aggregate over the
+        // complete filtered result.
+        composeTestRule.onNodeWithText("11 of 5,000 Logs").assertIsDisplayed()
     }
 
     private fun setScreenWithSelectedLog() {

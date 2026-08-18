@@ -9,9 +9,10 @@ import org.junit.Test
  *
  * Together they pin what the milestone claims visually: skeletons only while the launch refresh
  * runs, fixed-width severity and tag pills with `ss.SSS` row times under inserted UTC minute headers
- * in the populated and filtered states, a result line naming the matching and loaded counts
- * separately, the Filter control carrying its active-filter badge once a structured filter applies,
- * a retained search field and zero-valued indicator when a search matches nothing, and a modal error
+ * in the populated and filtered states, the compact app bar titled with the loaded and matching
+ * counts together, the filter action carrying its active-filter badge once a structured filter
+ * applies, the search field expanded under the bar when it is asked for, a zero-valued indicator
+ * and a `0 of 0 Logs` title when a search matches nothing, and a modal error
  * carrying Retry — and, once that modal is dismissed, a notice that keeps the failure visible and
  * retryable over the rows it left behind.
  *
@@ -58,6 +59,9 @@ class LogViewerScreenSnapshotTest {
 
     @Test
     fun filteredEmptyDark() = paparazzi.snapshotLogViewerScreen(LogViewerFixture.FilteredEmpty, darkTheme = true)
+
+    @Test
+    fun searchExpandedLight() = paparazzi.snapshotLogViewerScreen(LogViewerFixture.SearchExpanded, darkTheme = false)
 
     @Test
     fun pageRefreshErrorLight() = paparazzi.snapshotLogViewerScreen(LogViewerFixture.PageRefreshError, darkTheme = false)

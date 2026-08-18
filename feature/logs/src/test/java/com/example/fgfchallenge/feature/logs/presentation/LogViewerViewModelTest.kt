@@ -260,6 +260,38 @@ class LogViewerViewModelTest {
     }
 
     @Test
+    fun `showing and hiding the search field keeps the text the user typed`() {
+        viewModel.onAction(LogViewerAction.SearchOpened)
+        assertThat(viewModel.state.value.isSearchExpanded).isTrue()
+
+        viewModel.onAction(LogViewerAction.QueryChanged("timeout"))
+        viewModel.onAction(LogViewerAction.SearchDismissed)
+
+        // The text is the user's search, not the control's state. Collapsing withdraws the field
+        // only, so a search they never cleared goes on narrowing the result — which is exactly why
+        // the app bar's search action keeps an indicator once the field is out of sight.
+        assertThat(viewModel.state.value.isSearchExpanded).isFalse()
+        assertThat(viewModel.state.value.query).isEqualTo("timeout")
+    }
+
+    @Test
+    fun `search visibility alone neither re-queries nor drops the counted aggregate`() {
+        repository.emitSummary(LogQuery(), LogSummary(totalCount = 5_000))
+        val counted = viewModel.state.value.summary
+        assertThat(counted.readyTotalCount()).isEqualTo(5_000)
+
+        viewModel.onAction(LogViewerAction.SearchOpened)
+        viewModel.onAction(LogViewerAction.SearchDismissed)
+        settleTypedText()
+
+        // Nothing `toLogQuery` reads changed, so the running Pager and aggregate keep their results
+        // instead of being replaced by identical ones — and the total stays counted rather than
+        // returning to Pending, which is what `updateQueryInputs` would have done to it.
+        assertThat(repository.summaryQueries).containsExactly(LogQuery())
+        assertThat(viewModel.state.value.summary).isEqualTo(counted)
+    }
+
+    @Test
     fun `selection and dismissal do not restart the query`() {
         repository.store(testLogEntry("1711-58123"))
 

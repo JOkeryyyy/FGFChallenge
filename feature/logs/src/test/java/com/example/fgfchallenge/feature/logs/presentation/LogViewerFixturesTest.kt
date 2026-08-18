@@ -200,6 +200,18 @@ class LogViewerFixturesTest {
     }
 
     @Test
+    fun `the search expanded state shows the field without narrowing anything`() {
+        val state = LogViewerFixtures.searchExpandedState()
+
+        // Expanding search is a visibility change and nothing else, so the sample that shows the
+        // field open reports the same unfiltered result the collapsed one does.
+        assertThat(state.isSearchExpanded).isTrue()
+        assertThat(state.query).isEmpty()
+        assertThat(state.activeFilterCount).isEqualTo(0)
+        assertThat(state.summary).isEqualTo(LogViewerSummaryState.Ready(LogViewerFixtures.allLogsSummary))
+    }
+
+    @Test
     fun `loading and error states report no counted summary`() {
         assertThat(LogViewerFixtures.loadingState.refresh).isEqualTo(LogViewerRefreshState.InProgress)
         assertThat(LogViewerFixtures.loadingState.summary).isEqualTo(LogViewerSummaryState.Pending)

@@ -1,25 +1,39 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Screen shell -->
-    <string name="log_viewer_title">Semantic Logs</string>
+    <!--
+        App bar title: how many rows Paging holds of how many the query matches, both pre-grouped
+        ("100,000") before they are inserted. It replaces a fixed product name because the numbers
+        that describe the active query are worth more in the most prominent position than one that
+        never changes, and the pair is routinely different by three orders of magnitude — which is
+        exactly why neither is shown without the other.
+    -->
+    <string name="log_viewer_title_count">%1$s of %2$s Logs</string>
+    <!-- Shown until the aggregate for the current query has been counted; never a stale total. -->
+    <string name="log_viewer_title_counting">Counting logs…</string>
 
     <!--
-        Result line. Both counts are pre-grouped ("100,000") before they are inserted. It reports
-        the matching and loaded counts side by side on purpose: the first is the complete filtered
-        database result, the second is only what Paging currently holds, and the two are routinely
-        different by three orders of magnitude.
+        Sort toggle. The icon is the same in both directions, so the label carries the order in
+        effect and the one a tap produces — a toggle that only names the current state leaves the
+        result of pressing it to be guessed.
     -->
-    <string name="log_viewer_result_count">%1$s matching · %2$s loaded</string>
-    <!-- Shown until the aggregate for the current query has been counted; never a stale total. -->
-    <string name="log_viewer_result_count_pending">Counting matches · %1$s loaded</string>
-    <string name="log_viewer_sort_newest_first">Newest first</string>
-    <string name="log_viewer_sort_oldest_first">Oldest first</string>
-    <string name="log_viewer_sort_action">Change sort order</string>
+    <string name="log_viewer_sort_action_newest_first">Sorted newest first. Change to oldest first.</string>
+    <string name="log_viewer_sort_action_oldest_first">Sorted oldest first. Change to newest first.</string>
 
-    <!-- Filter entry. The badge shows the bare count; this describes it for a screen reader. -->
+    <!--
+        Search action. The field is hidden until it is asked for, but the text survives hiding it,
+        so the collapsed state has its own label for a search that is still narrowing the result.
+    -->
+    <string name="log_viewer_search_action">Search logs</string>
+    <string name="log_viewer_search_active_action">Search logs, search active</string>
+    <string name="log_viewer_search_close_action">Close search</string>
+
+    <!--
+        Filter entry. The icon carries no text, so the active count is folded into its label rather
+        than announced as a bare number beside it.
+    -->
     <string name="log_viewer_filter_action">Filter</string>
-    <plurals name="log_viewer_active_filter_count">
-        <item quantity="one">%1$d active filter</item>
-        <item quantity="other">%1$d active filters</item>
+    <plurals name="log_viewer_filter_action_active">
+        <item quantity="one">Filter, %1$d active filter</item>
+        <item quantity="other">Filter, %1$d active filters</item>
     </plurals>
 
     <!-- Severity summary card -->

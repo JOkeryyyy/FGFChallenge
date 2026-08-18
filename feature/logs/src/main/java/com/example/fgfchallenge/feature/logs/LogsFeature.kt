@@ -109,6 +109,10 @@ private fun PopulatedContentNarrowPreview() = LogViewerFixturePreview(LogViewerF
 @Composable
 private fun PopulatedContentWidePreview() = LogViewerFixturePreview(LogViewerFixture.AllLogs, darkTheme = false)
 
+@Preview(name = "Search expanded light", widthDp = 360, heightDp = 640)
+@Composable
+private fun SearchExpandedLightPreview() = LogViewerFixturePreview(LogViewerFixture.SearchExpanded, darkTheme = false)
+
 @Preview(name = "Stale snapshot light", widthDp = 360, heightDp = 640)
 @Composable
 private fun StaleSnapshotLightPreview() = LogViewerFixturePreview(LogViewerFixture.StaleSnapshot, darkTheme = false)

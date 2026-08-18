@@ -30,6 +30,7 @@ This document resolves implementation-significant gaps in the original take-home
 | **No-results timing** | Paging can temporarily have zero loaded rows while work is active. | Show no results only after the current aggregate query completes with total count zero. |
 | **Details lookup** | It is unclear whether details depend on loaded rows. | Resolve details by stable log ID through the repository so later-page rows remain selectable without retaining all rows in UI state. |
 | **UI quality** | “Pixel-perfect” has no supplied production design. | Follow `UIWireframe.png` as the behavioral low-fidelity contract. |
+| **Screen-level controls** | The wireframe arranges the title, search field, Filter button, and sort control as stacked rows, without stating that arrangement is required. | Collapse them into one pinned Material 3 small top app bar, which is the platform convention for screen-level commands and returns two rows of height to the list. All filter, search, sort, aggregate, Paging, and detail behavior is preserved; only the arrangement changes. |
 
 ## Canonical query semantics
 
@@ -123,7 +124,9 @@ Rapid search, filter, or sort replacement cancels obsolete work. Rows and summar
 - Paged rows travel separately as `Flow<PagingData<LogViewerListItem>>`.
 - Startup loading/error is distinct from Paging refresh and append states.
 - Append loading appears after retained rows; append failure preserves those rows and exposes retry at the boundary.
+- The app bar title reports both counts together — the rows Paging currently holds and the complete filtered result (`100 of 2,418 Logs`) — and shows `Counting logs…` until the active query's aggregate arrives, since a loaded figure paired with a total counted for previous criteria would be worse than showing neither.
 - Filter controls show an active-category count. Draft changes do not affect that count until Apply.
+- Search visibility is bounded UI state separate from the search text. Expanding or collapsing the field derives no new query and discards no text; a collapsed non-blank search is reported by an indicator on the search action.
 - The summary explicitly indicates that counts and density cover all matching records.
 - Minute headers remain regular list items and stay correct when a minute spans two pages.
 - Details-sheet visibility derives from selected-log state and supports close, swipe-down, and Back dismissal.

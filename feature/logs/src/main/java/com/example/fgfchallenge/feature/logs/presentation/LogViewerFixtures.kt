@@ -33,8 +33,8 @@ import java.time.Instant
  * hand-written one. A golden therefore pins the real formatting: real UTC `ss.SSS` row times, real
  * minute headers, real severity tones. The severity summaries are real too — the all-logs counts
  * are the supplied dataset's distribution and the filtered counts are the wireframe's `network`
- * tag filter — while the row lists are deliberately short representative samples, so a displayed total
- * of `5,000 matching` describes the dataset the screen shows in the app, not the number of rows
+ * tag filter — while the row lists are deliberately short representative samples, so an app bar
+ * reading `5,000 Logs` describes the dataset the screen shows in the app, not the number of rows
  * here.
  */
 internal object LogViewerFixtures {
@@ -130,6 +130,14 @@ internal object LogViewerFixtures {
             summary = LogViewerSummaryState.Ready(filteredEmptySummary),
         )
 
+    /**
+     * The app bar's search field revealed, over the unfiltered result.
+     *
+     * Deliberately with an empty query: expanding search is a visibility change and nothing else,
+     * so the sample that shows the field open must not also show a narrowed result.
+     */
+    fun searchExpandedState(): LogViewerUiState = allLogsState().copy(isSearchExpanded = true)
+
     /** A retryable launch failure the user has not dismissed, so the modal is up. */
     fun errorState(): LogViewerUiState = LogViewerUiState(refresh = LogViewerRefreshState.Failed())
 
@@ -168,6 +176,8 @@ internal object LogViewerFixtures {
             LogViewerFixture.Filtered -> pagingDataOf(filteredItems)
 
             LogViewerFixture.FilteredEmpty -> pagingDataOf(emptyList())
+
+            LogViewerFixture.SearchExpanded -> pagingDataOf(allLogsItems)
 
             LogViewerFixture.StaleSnapshot -> pagingDataOf(allLogsItems)
 
@@ -293,6 +303,9 @@ internal enum class LogViewerFixture {
     /** A search that matches nothing, so the field keeps its text above the no-results state. */
     FilteredEmpty,
 
+    /** The app bar's search field expanded over the unfiltered result. */
+    SearchExpanded,
+
     /** A dismissed refresh failure over the retained snapshot, where retry is all that is left. */
     StaleSnapshot,
 
@@ -341,6 +354,10 @@ internal fun logViewerFixtureState(fixture: LogViewerFixture): LogViewerUiState 
 
         LogViewerFixture.FilteredEmpty -> {
             LogViewerFixtures.filteredEmptyState()
+        }
+
+        LogViewerFixture.SearchExpanded -> {
+            LogViewerFixtures.searchExpandedState()
         }
     }
 

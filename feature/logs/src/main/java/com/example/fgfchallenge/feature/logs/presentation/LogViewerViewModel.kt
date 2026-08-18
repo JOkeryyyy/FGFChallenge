@@ -162,6 +162,18 @@ internal class LogViewerViewModel
                     updateQueryInputs { it.copy(query = action.query) }
                 }
 
+                // Visibility only, and deliberately not routed through `updateQueryInputs`: showing
+                // or hiding the field changes nothing `toLogQuery` reads, so the running Pager and
+                // aggregate keep their results and the summary is not dropped to Pending. The text
+                // survives a dismissal because it is the user's search, not the control's state.
+                LogViewerAction.SearchOpened -> {
+                    _state.update { it.copy(isSearchExpanded = true) }
+                }
+
+                LogViewerAction.SearchDismissed -> {
+                    _state.update { it.copy(isSearchExpanded = false) }
+                }
+
                 LogViewerAction.SortOrderToggled -> {
                     updateQueryInputs { it.copy(sortOrder = it.sortOrder.toggled()) }
                 }

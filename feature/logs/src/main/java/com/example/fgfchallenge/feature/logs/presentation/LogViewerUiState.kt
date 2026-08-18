@@ -29,6 +29,15 @@ import com.example.fgfchallenge.feature.logs.presentation.model.latencyExtent
 @Immutable
 internal data class LogViewerUiState(
     val query: String = "",
+    /**
+     * Whether the app bar's search field is showing, which is presentation only.
+     *
+     * It sits beside [query] rather than replacing it: the text is the query input and outlives the
+     * field it was typed into, so collapsing search hides the control without withdrawing the
+     * search — the app bar's search action keeps a small indicator to say so. Opening or closing it
+     * therefore changes nothing `toLogQuery` reads.
+     */
+    val isSearchExpanded: Boolean = false,
     /** The filters currently *applied* — the only ones the query is derived from. */
     val filters: LogFilterSelection = LogFilterSelection(),
     /**

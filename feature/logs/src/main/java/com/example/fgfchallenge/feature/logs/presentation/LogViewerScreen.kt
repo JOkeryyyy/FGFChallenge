@@ -8,43 +8,54 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
@@ -109,9 +120,9 @@ private fun Modifier.clearFocusOnUnconsumedTap(focusManager: FocusManager): Modi
  * boundary.
  *
  * Its input arrives as two values because the ViewModel produces two: [state] is the bounded screen
- * state, [logs] the paged rows. The screen never merges them into one list — it reads counts from
- * [state] and rows from [logs], and the one place it combines them, the result line, says which
- * number came from which.
+ * state, [logs] the paged rows. The screen never merges them into one list — the app bar's title
+ * reports both counts and says which is which, taking the total from the aggregate in [state] and
+ * the loaded figure from [logs], and neither is ever computed from the other's source.
  *
  * [logs] also carries Paging's own load states, which are deliberately *not* mirrored into [state]:
  * they belong to the list's loading, they change as the user scrolls, and Paging's own `retry()` is
@@ -130,63 +141,72 @@ internal fun LogViewerScreen(
 ) {
     val focusManager = LocalFocusManager.current
 
-    Surface(
+    Scaffold(
         modifier = modifier.fillMaxSize().clearFocusOnUnconsumedTap(focusManager),
-        color = MaterialTheme.colorScheme.background,
-    ) {
+        containerColor = MaterialTheme.colorScheme.background,
+        // Scaffold subtracts what the bar already consumed, so the top inset is handled once by
+        // TopAppBar and this only adds the cutout, IME, and navigation-bar sides back to the body.
+        contentWindowInsets = WindowInsets.safeDrawing,
+        topBar = {
+            LogViewerTopBar(
+                summary = state.summary,
+                loadedRowCount = logs.loadedRowCount(),
+                activeFilterCount = state.activeFilterCount,
+                sortOrder = state.sortOrder,
+                query = state.query,
+                isSearchExpanded = state.isSearchExpanded,
+                onAction = onAction,
+            )
+        },
+    ) { contentPadding ->
         // One centered pane: it grows with the window up to Dimens.contentMaxWidth and then stops,
         // so log rows never stretch into unscannable full-width lines on a large screen.
         Box(
-            modifier = Modifier.fillMaxSize().safeDrawingPadding(),
+            modifier = Modifier.fillMaxSize().padding(contentPadding),
             contentAlignment = Alignment.TopCenter,
         ) {
-            Column(
-                modifier = Modifier.widthIn(max = Dimens.contentMaxWidth).fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-            ) {
-                LogViewerTitle()
-                if (state.refresh is LogViewerRefreshState.InProgress) {
-                    // Skeletons rather than the stored rows: until the refresh resolves, nothing
-                    // known about the snapshot is worth presenting as the current result.
-                    LoadingContent()
-                } else {
-                    LogViewerContent(
-                        state = state,
-                        logs = logs,
-                        onAction = onAction,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+            val pane = Modifier.widthIn(max = Dimens.contentMaxWidth).fillMaxSize().padding(top = Spacing.sm)
+            if (state.refresh is LogViewerRefreshState.InProgress) {
+                // Skeletons rather than the stored rows: until the refresh resolves, nothing known
+                // about the snapshot is worth presenting as the current result.
+                LoadingContent(modifier = pane)
+            } else {
+                LogViewerContent(
+                    state = state,
+                    logs = logs,
+                    onAction = onAction,
+                    modifier = pane,
+                )
             }
         }
-        // The failure is a modal over whatever snapshot Room kept, so dismissing it reveals the
-        // retained rows without either action having claimed they are current.
-        if (state.showsRefreshFailure) {
-            ErrorDialog(
-                title = stringResource(R.string.log_viewer_error_title),
-                message = stringResource(R.string.log_viewer_error_message),
-                onRetry = { onAction(LogViewerAction.RetryClicked) },
-                onDismiss = { onAction(LogViewerAction.ErrorDismissed) },
-            )
-        }
-        // Close, swipe-down, and Back all reach LogDetailsSheet's single onDismissRequest, so every
-        // dismissal path reports the same action and the ViewModel needs no per-path handling.
-        state.selectedLog?.let { details ->
-            LogDetailsSheet(
-                details = details,
-                onDismissRequest = { onAction(LogViewerAction.DetailsDismissed) },
-            )
-        }
-        // Same idiom for the filter sheet: it is open exactly while a draft exists, and every edit
-        // it reports goes straight back out as an action. The screen translates between the design
-        // system's vocabulary and the feature's, and decides nothing itself.
-        state.filterDraft?.let { draft ->
-            LogFilterSheet(
-                filters = draft.toFilterSheetUi(state.filterOptions),
-                onEvent = { event -> event.toAction()?.let(onAction) },
-                onDismissRequest = { onAction(LogViewerAction.FilterSheetDismissed) },
-            )
-        }
+    }
+    // The failure is a modal over whatever snapshot Room kept, so dismissing it reveals the
+    // retained rows without either action having claimed they are current.
+    if (state.showsRefreshFailure) {
+        ErrorDialog(
+            title = stringResource(R.string.log_viewer_error_title),
+            message = stringResource(R.string.log_viewer_error_message),
+            onRetry = { onAction(LogViewerAction.RetryClicked) },
+            onDismiss = { onAction(LogViewerAction.ErrorDismissed) },
+        )
+    }
+    // Close, swipe-down, and Back all reach LogDetailsSheet's single onDismissRequest, so every
+    // dismissal path reports the same action and the ViewModel needs no per-path handling.
+    state.selectedLog?.let { details ->
+        LogDetailsSheet(
+            details = details,
+            onDismissRequest = { onAction(LogViewerAction.DetailsDismissed) },
+        )
+    }
+    // Same idiom for the filter sheet: it is open exactly while a draft exists, and every edit it
+    // reports goes straight back out as an action. The screen translates between the design system's
+    // vocabulary and the feature's, and decides nothing itself.
+    state.filterDraft?.let { draft ->
+        LogFilterSheet(
+            filters = draft.toFilterSheetUi(state.filterOptions),
+            onEvent = { event -> event.toAction()?.let(onAction) },
+            onDismissRequest = { onAction(LogViewerAction.FilterSheetDismissed) },
+        )
     }
 }
 
@@ -240,24 +260,258 @@ private fun LogFilterSheetEvent.toAction(): LogViewerAction? =
         }
     }
 
+/**
+ * The screen's one persistent control surface: what the query currently matches, and the three
+ * controls that change it.
+ *
+ * A pinned app bar rather than a title above a row of buttons. Filter, search, and sort are the only
+ * screen-level commands the viewer has, and as icons they occupy one bar height instead of three
+ * stacked rows — which is height the list gets back, on a screen whose whole purpose is scanning
+ * rows. Each control keeps a text label for a screen reader, since an icon carries none.
+ *
+ * The title is the two counts rather than a fixed product name: the numbers that describe the query
+ * are worth more in the most prominent position than a name that never changes, and stating them
+ * together — loaded of matching — is what keeps a paged list from reading as the whole result.
+ *
+ * The search *field* is the one control that is not an icon, because it takes typing. It expands
+ * under the bar rather than replacing the title, so the count that says how the search is going
+ * stays visible while it is being typed.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LogViewerTitle(modifier: Modifier = Modifier) {
-    Text(
-        text = stringResource(R.string.log_viewer_title),
-        style = MaterialTheme.typography.titleLarge,
-        color = MaterialTheme.colorScheme.onBackground,
-        textAlign = TextAlign.Center,
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .padding(horizontal = Dimens.screenHorizontalPadding, vertical = Spacing.xs),
-    )
+private fun LogViewerTopBar(
+    summary: LogViewerSummaryState,
+    loadedRowCount: Int,
+    activeFilterCount: Int,
+    sortOrder: LogSortOrder,
+    query: String,
+    isSearchExpanded: Boolean,
+    onAction: (LogViewerAction) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // One surface behind both rows, so the expanded field reads as part of the bar rather than as
+    // the first item of the content below it.
+    Surface(modifier = modifier, color = MaterialTheme.colorScheme.surface) {
+        Column {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = logCountTitle(summary = summary, loadedRowCount = loadedRowCount),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                navigationIcon = {
+                    FilterAction(
+                        activeFilterCount = activeFilterCount,
+                        onClick = { onAction(LogViewerAction.FilterSheetOpened) },
+                    )
+                },
+                actions = {
+                    SearchAction(
+                        isExpanded = isSearchExpanded,
+                        hasQuery = query.isNotBlank(),
+                        onClick = {
+                            onAction(
+                                if (isSearchExpanded) {
+                                    LogViewerAction.SearchDismissed
+                                } else {
+                                    LogViewerAction.SearchOpened
+                                },
+                            )
+                        },
+                    )
+                    SortAction(
+                        sortOrder = sortOrder,
+                        onClick = { onAction(LogViewerAction.SortOrderToggled) },
+                    )
+                },
+            )
+            if (isSearchExpanded) {
+                ExpandedSearchField(
+                    query = query,
+                    onQueryChange = { onAction(LogViewerAction.QueryChanged(it)) },
+                )
+            }
+        }
+    }
 }
 
 /**
- * Summary card, search field, and the result/sort row sit above exactly one flat [LazyColumn], as
- * the wireframe specifies. The list is the only scrolling region, so the search box and the density
- * reading stay in view while scanning results.
+ * How many rows Paging holds of how many the query matches, as the bar's title.
+ *
+ * Both numbers or neither. The two are routinely orders of magnitude apart, so the loaded figure
+ * alone would understate the result and the total alone would leave no sign that the list is paged —
+ * and a loaded count paired with a total counted for *previous* criteria would be worse than either.
+ * That last case is what [LogViewerSummaryState.Pending] exists to prevent, so an uncounted query
+ * says so rather than showing a number for half the pair.
+ */
+@Composable
+private fun logCountTitle(
+    summary: LogViewerSummaryState,
+    loadedRowCount: Int,
+): String =
+    when (summary) {
+        LogViewerSummaryState.Pending -> {
+            stringResource(R.string.log_viewer_title_counting)
+        }
+
+        is LogViewerSummaryState.Ready -> {
+            stringResource(
+                R.string.log_viewer_title_count,
+                groupedCount(loadedRowCount),
+                groupedCount(summary.summary.totalLogCount),
+            )
+        }
+    }
+
+/**
+ * Opens the filter sheet, and states how many filter categories are currently narrowing the result.
+ *
+ * The count is a badge rather than only a highlight because the sheet's contents are out of sight
+ * once it closes: without it, a result narrowed by an applied filter is indistinguishable from an
+ * unfiltered one. Zero renders as no badge at all.
+ *
+ * The badge's number replaces the icon's own label rather than sitting beside it, because a screen
+ * reader announcing "Filter" then "3" leaves the relationship between them to be guessed.
+ */
+@Composable
+private fun FilterAction(
+    activeFilterCount: Int,
+    onClick: () -> Unit,
+) {
+    val label =
+        if (activeFilterCount > 0) {
+            pluralStringResource(
+                R.plurals.log_viewer_filter_action_active,
+                activeFilterCount,
+                activeFilterCount,
+            )
+        } else {
+            stringResource(R.string.log_viewer_filter_action)
+        }
+    IconButton(onClick = onClick) {
+        BadgedBox(
+            badge = {
+                if (activeFilterCount > 0) {
+                    Badge { Text(text = activeFilterCount.toString()) }
+                }
+            },
+        ) {
+            Icon(imageVector = Icons.Default.FilterList, contentDescription = label)
+        }
+    }
+}
+
+/**
+ * Shows or hides the search field, and says whether a search is in effect while it is hidden.
+ *
+ * The indicator is the point of collapsing the field at all: the text outlives the control, so
+ * without it a result narrowed by a search the user typed a minute ago would look unfiltered. It is
+ * a dot rather than a count because a search is one condition, and it is announced in the label
+ * rather than left as a decoration.
+ */
+@Composable
+private fun SearchAction(
+    isExpanded: Boolean,
+    hasQuery: Boolean,
+    onClick: () -> Unit,
+) {
+    val label =
+        stringResource(
+            when {
+                isExpanded -> R.string.log_viewer_search_close_action
+                hasQuery -> R.string.log_viewer_search_active_action
+                else -> R.string.log_viewer_search_action
+            },
+        )
+    IconButton(onClick = onClick) {
+        BadgedBox(
+            badge = {
+                if (hasQuery && !isExpanded) {
+                    Badge()
+                }
+            },
+        ) {
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.Close else Icons.Default.Search,
+                contentDescription = label,
+            )
+        }
+    }
+}
+
+/**
+ * Tap-to-toggle between the two orders, as one icon.
+ *
+ * The icon is the same in both directions because it names the control, not the direction; the
+ * direction lives in the label, which states the order in effect *and* the one a tap produces —
+ * without both, a toggle whose only visible state is an icon is unusable without sight.
+ */
+@Composable
+private fun SortAction(
+    sortOrder: LogSortOrder,
+    onClick: () -> Unit,
+) {
+    val label =
+        stringResource(
+            when (sortOrder) {
+                LogSortOrder.NewestFirst -> R.string.log_viewer_sort_action_newest_first
+                LogSortOrder.OldestFirst -> R.string.log_viewer_sort_action_oldest_first
+            },
+        )
+    IconButton(onClick = onClick) {
+        Icon(imageVector = Icons.AutoMirrored.Filled.Sort, contentDescription = label)
+    }
+}
+
+/**
+ * The search field, revealed under the bar and focused as it appears.
+ *
+ * Autofocus is what makes a hidden field worth hiding: the tap that opened it is the same intent as
+ * the tap that would have selected it, so requiring a second one would make the compact bar cost the
+ * user an interaction. The request runs in an effect rather than during composition because the node
+ * has to exist before it can take focus.
+ */
+@Composable
+private fun ExpandedSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focusRequester = remember { FocusRequester() }
+    // Skipped for a preview or a golden: those are still renders of the screen, and taking focus
+    // there opens a text-input session — which is an interaction they cannot have, and whose IME
+    // machinery a host-side render has no thread to run.
+    val isInspecting = LocalInspectionMode.current
+    LaunchedEffect(isInspecting) {
+        if (!isInspecting) {
+            focusRequester.requestFocus()
+        }
+    }
+    // Centered and width-limited like the content below, while the bar itself spans the window.
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        LogSearchField(
+            query = query,
+            onQueryChange = onQueryChange,
+            enabled = true,
+            modifier =
+                Modifier
+                    .widthIn(max = Dimens.contentMaxWidth)
+                    .padding(horizontal = Dimens.screenHorizontalPadding)
+                    .padding(bottom = Spacing.xs)
+                    .focusRequester(focusRequester),
+        )
+    }
+}
+
+/**
+ * The summary card sits above exactly one flat [LazyColumn]. The list is the only scrolling region,
+ * so the density reading stays in view while scanning results — and the counts, filter, search, and
+ * sort controls stay in view above it, in the pinned app bar.
  */
 @Composable
 private fun LogViewerContent(
@@ -278,24 +532,6 @@ private fun LogViewerContent(
             )
         }
         SeveritySummaryCard(summary = state.summary, modifier = horizontalPadding)
-        LogSearchField(
-            query = state.query,
-            onQueryChange = { onAction(LogViewerAction.QueryChanged(it)) },
-            enabled = true,
-            modifier = horizontalPadding,
-        )
-        FilterSortRow(
-            activeFilterCount = state.activeFilterCount,
-            sortOrder = state.sortOrder,
-            onFilterClick = { onAction(LogViewerAction.FilterSheetOpened) },
-            onSortToggle = { onAction(LogViewerAction.SortOrderToggled) },
-            modifier = horizontalPadding,
-        )
-        ResultCountLabel(
-            summary = state.summary,
-            loadedRowCount = logs.loadedRowCount(),
-            modifier = horizontalPadding,
-        )
         // Paging's own refresh: a new query generation, or a snapshot replacement invalidating the
         // source. It is a thin bar rather than a skeleton because the previous rows are still below
         // it — replacing them would be the launch refresh's behavior, not a re-query's.
@@ -554,16 +790,6 @@ private fun SeveritySummaryCard(
 @Composable
 private fun ReadySeveritySummary(summary: SeveritySummaryUi) {
     val density = summary.toDensityUi()
-    Text(
-        text = stringResource(R.string.log_viewer_error_density, density.densityPercent),
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
-    Text(
-        text = stringResource(R.string.log_viewer_error_density_caption),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
     SeverityIndicator(density = density)
 }
 
@@ -604,127 +830,10 @@ private fun SummarySkeleton(
 }
 
 /**
- * Filter entry and sort control, as the wireframe pairs them: both change what the list below
- * shows, and both stay visible while scanning it.
- *
- * The wireframe's ⇅ glyph has no equivalent in `material-icons-core`, so the arrow points in the
- * direction of the active order instead — downward for newest first, upward for oldest first.
- */
-@Composable
-private fun FilterSortRow(
-    activeFilterCount: Int,
-    sortOrder: LogSortOrder,
-    onFilterClick: () -> Unit,
-    onSortToggle: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        FilterButton(activeFilterCount = activeFilterCount, onClick = onFilterClick)
-        TextButton(onClick = onSortToggle) {
-            Text(text = sortLabel(sortOrder), style = MaterialTheme.typography.labelLarge)
-            Spacer(modifier = Modifier.width(Spacing.xxs))
-            Icon(
-                imageVector =
-                    when (sortOrder) {
-                        LogSortOrder.NewestFirst -> Icons.Default.KeyboardArrowDown
-                        LogSortOrder.OldestFirst -> Icons.Default.KeyboardArrowUp
-                    },
-                contentDescription = stringResource(R.string.log_viewer_sort_action),
-                modifier = Modifier.size(SortIconSize),
-            )
-        }
-    }
-}
-
-/**
- * Opens the filter sheet, and states how many filter categories are currently narrowing the result.
- *
- * The count is a badge rather than only a highlight because the sheet's contents are out of sight
- * once it closes: without it, a result narrowed by an applied filter is indistinguishable from an
- * unfiltered one. Zero renders as no badge at all, matching the wireframe's inactive state.
- */
-@Composable
-private fun FilterButton(
-    activeFilterCount: Int,
-    onClick: () -> Unit,
-) {
-    OutlinedButton(onClick = onClick) {
-        Text(
-            text = stringResource(R.string.log_viewer_filter_action),
-            style = MaterialTheme.typography.labelLarge,
-        )
-        if (activeFilterCount > 0) {
-            // "3" alone reads as a bare number to a screen reader, so the badge carries the phrase
-            // the sighted reading gets from its position next to Filter.
-            val countDescription =
-                pluralStringResource(
-                    R.plurals.log_viewer_active_filter_count,
-                    activeFilterCount,
-                    activeFilterCount,
-                )
-            Spacer(modifier = Modifier.width(Spacing.xs))
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.semantics { contentDescription = countDescription },
-            ) {
-                Text(
-                    text = activeFilterCount.toString(),
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(horizontal = Spacing.xs, vertical = 2.dp),
-                )
-            }
-        }
-    }
-}
-
-/**
- * The two counts, side by side, directly above the rows they describe: how many logs the query
- * matches in the database, and how many of them Paging currently holds.
- *
- * Naming both is the point. The matching count comes from the aggregate over the complete filtered
- * result and is routinely orders of magnitude larger than the loaded one; showing only the loaded
- * count would understate the result, and showing only the total would leave no sign that the list
- * is paged.
- */
-@Composable
-private fun ResultCountLabel(
-    summary: LogViewerSummaryState,
-    loadedRowCount: Int,
-    modifier: Modifier = Modifier,
-) {
-    val loaded = groupedCount(loadedRowCount)
-    Text(
-        text =
-            when (summary) {
-                LogViewerSummaryState.Pending -> {
-                    stringResource(R.string.log_viewer_result_count_pending, loaded)
-                }
-
-                is LogViewerSummaryState.Ready -> {
-                    stringResource(
-                        R.string.log_viewer_result_count,
-                        groupedCount(summary.summary.totalLogCount),
-                        loaded,
-                    )
-                }
-            },
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onBackground,
-        modifier = modifier.fillMaxWidth(),
-    )
-}
-
-/**
  * How many *log rows* are loaded, excluding the minute headers the transformation inserted.
  *
- * `itemCount` would count those headers too and report more logs than the list holds. Scanning the
- * loaded window is bounded by Paging's own working set, not by the result size.
+ * `itemCount` would count those headers too and report more logs than the title claims are loaded.
+ * The loaded window is bounded by Paging\'s own working set, not by the result size.
  */
 private fun LazyPagingItems<LogViewerListItem>.loadedRowCount(): Int = itemSnapshotList.count { it is LogViewerListItem.LogRow }
 
@@ -734,12 +843,3 @@ private fun LazyPagingItems<LogViewerListItem>.loadedRowCount(): Int = itemSnaps
  * render the same text on every machine.
  */
 private fun groupedCount(count: Int): String = NumberFormat.getIntegerInstance(Locale.US).format(count)
-
-@Composable
-private fun sortLabel(sortOrder: LogSortOrder): String =
-    stringResource(
-        when (sortOrder) {
-            LogSortOrder.NewestFirst -> R.string.log_viewer_sort_newest_first
-            LogSortOrder.OldestFirst -> R.string.log_viewer_sort_oldest_first
-        },
-    )
