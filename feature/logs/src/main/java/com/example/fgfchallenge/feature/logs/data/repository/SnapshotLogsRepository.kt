@@ -4,16 +4,13 @@ import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.map
-import com.example.fgfchallenge.feature.logs.data.di.DefaultDispatcher
 import com.example.fgfchallenge.feature.logs.data.error.EmptyResult
 import com.example.fgfchallenge.feature.logs.data.error.LogsDataError
 import com.example.fgfchallenge.feature.logs.data.error.Result
-import com.example.fgfchallenge.feature.logs.data.error.map
+import com.example.fgfchallenge.feature.logs.data.error.guardLogsDataFailures
 import com.example.fgfchallenge.feature.logs.data.local.LogEntity
 import com.example.fgfchallenge.feature.logs.data.local.LogQuerySql
 import com.example.fgfchallenge.feature.logs.data.local.LogsDao
-import com.example.fgfchallenge.feature.logs.data.mapper.toEntity
-import com.example.fgfchallenge.feature.logs.data.mapper.toLogBatch
 import com.example.fgfchallenge.feature.logs.data.mapper.toLogEntry
 import com.example.fgfchallenge.feature.logs.data.mapper.toLogFilterOptions
 import com.example.fgfchallenge.feature.logs.data.mapper.toLogSummary
@@ -21,74 +18,41 @@ import com.example.fgfchallenge.feature.logs.data.model.LogEntry
 import com.example.fgfchallenge.feature.logs.data.model.LogFilterOptions
 import com.example.fgfchallenge.feature.logs.data.model.LogQuery
 import com.example.fgfchallenge.feature.logs.data.model.LogSummary
-import com.example.fgfchallenge.feature.logs.data.remote.LogsApi
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.withContext
-import java.io.IOException
 import javax.inject.Inject
 
 /**
- * The [LogsRepository] that coordinates the two sources: the one-shot remote endpoint that supplies
- * a complete snapshot, and the feature-owned Room database that answers every read afterwards.
+ * The [LogsRepository] that coordinates the two sources: a [SnapshotRefresher] that writes one
+ * complete snapshot at launch, and the feature-owned Room database that answers every read
+ * afterwards.
  *
  * The name describes that strategy rather than either source, because neither one alone is the
- * source of truth: the network only ever writes, and Room only ever reads.
+ * source of truth: the refresher only ever writes, and Room only ever reads.
  *
- * Both sources are used directly instead of through `LogsRemoteDataSource`/`LogsLocalDataSource`
- * wrappers. `LogsApi` and `LogsDao` are already the narrow, swappable interfaces such wrappers
- * would introduce, so a pass-through layer would add indirection without adding a boundary
- * (`documentation/conventions/data-layer.md` §6).
+ * Room is used directly instead of through a `LogsLocalDataSource` wrapper. `LogsDao` is already
+ * the narrow, swappable interface such a wrapper would introduce, so a pass-through layer would add
+ * indirection without adding a boundary (`documentation/conventions/data-layer.md` §6). The write
+ * side does have a real second implementation — the benchmark variant's fixed fixture — which is
+ * why [SnapshotRefresher] exists and `LogsDao` still does not have an equivalent.
  *
- * This class is where infrastructure failures stop. Everything the endpoint or SQLite can throw
- * becomes [LogsDataError], except coroutine cancellation, which is always rethrown untouched so
- * structured concurrency keeps working.
+ * This class is where infrastructure failures stop for reads, using the same
+ * `guardLogsDataFailures` boundary the refreshers use: everything SQLite can throw becomes
+ * [LogsDataError], except coroutine cancellation, which is always rethrown untouched so structured
+ * concurrency keeps working.
  */
 internal class SnapshotLogsRepository
     @Inject
     constructor(
-        private val logsApi: LogsApi,
+        private val snapshotRefresher: SnapshotRefresher,
         private val logsDao: LogsDao,
-        @param:DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
     ) : LogsRepository {
         /**
-         * Fetch, decode, map, then replace — in that order, and never interleaved.
-         *
-         * The whole payload becomes storable rows before the transaction opens, so an invalid entry
-         * is discovered while the previous snapshot is still intact. The replacement itself is one
-         * transaction inside the DAO, which is what makes a mid-import failure roll back to that
-         * previous snapshot rather than leave the table empty or half-written.
+         * One delegation, by design: which snapshot the launch refresh installs is the variant's
+         * decision, and everything below this line reads whatever it left in Room.
          */
-        override suspend fun refreshSnapshot(): EmptyResult<LogsDataError> =
-            guardDataFailures {
-                val response = logsApi.getLogs()
-                val body = response.body()
-                if (!response.isSuccessful || body == null) {
-                    // A non-2xx status, or a 2xx with no body: well-formed HTTP, unusable payload.
-                    return@guardDataFailures Result.Error(LogsDataError)
-                }
-
-                // Validating and mapping the snapshot is CPU work, so it moves off the caller's
-                // thread. The Retrofit call already suspends, and the DAO write is main-safe.
-                val entities =
-                    withContext(defaultDispatcher) {
-                        body.toLogBatch().map { batch -> batch.entries.map(LogEntry::toEntity) }
-                    }
-
-                when (entities) {
-                    is Result.Error -> {
-                        entities
-                    }
-
-                    is Result.Success -> {
-                        logsDao.replaceSnapshot(entities.data)
-                        Result.Success(Unit)
-                    }
-                }
-            }
+        override suspend fun refreshSnapshot(): EmptyResult<LogsDataError> = snapshotRefresher.refresh()
 
         override fun pagedLogs(query: LogQuery): Flow<PagingData<LogEntry>> =
             Pager(
@@ -129,7 +93,7 @@ internal class SnapshotLogsRepository
             ) { tags, bounds -> bounds.toLogFilterOptions(tags) }
 
         override suspend fun logById(id: String): Result<LogEntry?, LogsDataError> =
-            guardDataFailures {
+            guardLogsDataFailures {
                 Result.Success(logsDao.logById(id)?.toLogEntry())
             }
 
@@ -139,28 +103,4 @@ internal class SnapshotLogsRepository
             const val PREFETCH_DISTANCE = 25
             const val MAX_CACHED_ROWS = 500
         }
-    }
-
-/**
- * Runs a data-access [block] and collapses every expected infrastructure failure into
- * [LogsDataError], so no exception type from either source escapes the repository.
- *
- * It is `inline`, so [block] may suspend even though this function does not.
- */
-private inline fun <T> guardDataFailures(block: () -> Result<T, LogsDataError>): Result<T, LogsDataError> =
-    try {
-        block()
-    } catch (cancellation: CancellationException) {
-        // Must come first and stay `kotlinx.coroutines.CancellationException`: swallowing it here
-        // would make a cancelled refresh look handled instead of cancelled. It is also a
-        // `RuntimeException`, so the catch below would otherwise absorb it.
-        throw cancellation
-    } catch (_: IOException) {
-        // Connectivity loss and timeouts: `UnknownHostException`, `ConnectException`,
-        // `NoRouteToHostException`, `SocketTimeoutException`.
-        Result.Error(LogsDataError)
-    } catch (_: RuntimeException) {
-        // Decoding failures (`SerializationException`), SQLite failures (`SQLiteException` is a
-        // `RuntimeException`), and anything else unexpected.
-        Result.Error(LogsDataError)
     }
