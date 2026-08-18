@@ -30,4 +30,6 @@ include(
     ":core:designsystem",
     ":core:network",
     ":feature:logs",
+    ":feature:logs:data",
+    ":feature:logs:presentation",
 )

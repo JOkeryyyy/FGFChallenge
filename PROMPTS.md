@@ -1,5 +1,10 @@
 # Prompts
 
+- Date: 2026-08-18
+- Tool: Codex
+- Task: Establish the temporary two-module Gradle skeleton for the approved Logs data/presentation module split.
+- Key prompt: Create independently configurable `:feature:logs:data` and `:feature:logs:presentation` Android-library skeletons, retain the legacy `:feature:logs` migration bridge, record the required missing-project configuration failure before adding module scripts, and do not migrate sources or modify `:app`.
+
 - Date: 2026-08-16
 - Tool: ChatGPT
 - Task: Analyze requirement ambiguities from refinement/grooming and define reasonable implementation assumptions for the AI Semantic Log Android take-home prototype.
