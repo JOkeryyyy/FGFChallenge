@@ -100,7 +100,7 @@ internal class SnapshotLogsRepository
         private companion object {
             /** `ARCHITECTURE.md` fixes these: 100 rows per page, next page fetched 25 rows out. */
             const val PAGE_SIZE = 100
-            const val PREFETCH_DISTANCE = 25
-            const val MAX_CACHED_ROWS = 500
+            const val PREFETCH_DISTANCE = 30
+            const val MAX_CACHED_ROWS = PagingConfig.MAX_SIZE_UNBOUNDED
         }
     }
