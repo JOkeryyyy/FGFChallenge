@@ -489,7 +489,19 @@ Import avoids additional full-size application/UI copies where bounded mapping o
 
 ## Optional performance test
 
-Keep the existing bounded Room/Paging design and avoid obvious main-thread work or full-result copies in `LogViewerUiState`. After the core flow works, a manual responsiveness check against the supplied fixture may be run if time permits. A deterministic 100,000-record fixture, device/emulator benchmark, query-plan analysis, tuning cycle, and timing evidence remain optional; neither running the test nor acting on its findings blocks acceptance.
+Keep the existing bounded Room/Paging design and avoid obvious main-thread work or full-result copies in `LogViewerUiState`. After the core flow works, an optional Macrobenchmark suite may measure the viewer on one documented One UI 2.5 physical device against a benchmark-only deterministic 100,000-row Room snapshot. Query-plan analysis, tuning cycles, and timing evidence remain optional; neither running the suite nor acting on its findings blocks acceptance.
+
+Only the snapshot-refresh strategy varies by build type. The read path is identical in every variant:
+
+```text
+debug/release launch -> RemoteSnapshotRefresher -> atomic Room replacement
+benchmark launch     -> BenchmarkSnapshotRefresher -> ensure deterministic 100k Room fixture
+all variants read    -> SnapshotLogsRepository -> Room/Paging/query/summary/details
+```
+
+`SnapshotRefresher` is a variant seam, justified by two real refresh implementations selected per source set. It is not a domain layer, not a use case, and not a production data source: nothing outside `data/repository` consumes it, and it adds no indirection to any read. Room remains the post-refresh source of truth for every variant, and the benchmark refresher is idempotent so `CompilationMode.Ignore()` can preserve the seeded snapshot across iterations without reinstalling or clearing app data.
+
+Measurement is observational. It records `frameDurationCpuMs` percentiles and one named interaction-latency trace section per scenario, compares only runs from the same device under matching recorded system state, and defines no threshold. It is not part of the commit-time quality gate and never gates CI, acceptance, or delivery. The protocol lives in [`performanceBenchmark.md`](performanceBenchmark.md).
 
 ## Verification strategy
 
@@ -498,7 +510,7 @@ Keep focused tests at the highest-value boundaries:
 1. Data/repository tests cover supported query behavior, a successful snapshot replacement, and a retryable refresh failure.
 2. ViewModel tests cover the principal loading/error/retry and selection paths.
 3. One representative Paparazzi screenshot test per screen demonstrates visual verification.
-4. An optional manual performance smoke test may record observations from the supplied fixture; it is not an acceptance gate.
+4. An optional Macrobenchmark suite may record physical-device observations against the benchmark-only 100,000-row fixture; it is not an acceptance gate and is not part of the commit-time quality gate.
 
 Existing instrumented tests remain in place, but no additional interaction or instrumented-test coverage is required. Fakes are preferred over mocking frameworks. CI continues its existing host-side checks without making optional performance work or a visual-state matrix delivery gates.
 

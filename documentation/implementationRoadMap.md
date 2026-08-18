@@ -244,9 +244,12 @@ This one-screen prototype does not justify a standalone domain layer. Keep the i
 
 **Work**
 
-- If time permits after the core flow works, exercise the supplied fixture manually and record any useful responsiveness observation.
-- Keep database, mapping, and import work off the main thread and avoid putting all matches in `UiState`.
-- Keep the initial parameterized Room/SQLite `LIKE` implementation; do not add alternate search technology, query-plan analysis, synthetic 100k data, or optimization work without an observed need.
+- Use the documented One UI 2.5 physical baseline device and a benchmark-only deterministic 100,000-row Room snapshot.
+- Exercise initial-window scrolling, the first Paging boundary, literal message/ID search, and an applied combined filter with Macrobenchmark.
+- Use `CompilationMode.Ignore()`, ten iterations per scenario, `frameDurationCpuMs` percentiles, named interaction latency, Macrobenchmark JSON, and Perfetto traces.
+- Compare only the same device under matching recorded system state. Results remain observational and never gate CI, acceptance, or delivery.
+- Keep the current query implementation during measurement; optimization follows only from an observed and reproduced regression.
+- [`documentation/performanceBenchmark.md`](performanceBenchmark.md) is the runbook for this step; [`documentation/performance-run-template.md`](performance-run-template.md) is the per-run record.
 
 **Exit goal**
 
