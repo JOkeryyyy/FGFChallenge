@@ -364,10 +364,11 @@ Repository Pager configuration is:
 pageSize = 100
 initialLoadSize = 100
 prefetchDistance = 25
+maxSize = 500
 enablePlaceholders = false
 ```
 
-The initial page therefore contains the newest 100 matches, or all matches when fewer exist. The next page is requested before the final 25 loaded rows are exhausted. Room supplies a `PagingSource`; snapshot replacement and query replacement invalidate obsolete sources.
+The initial page therefore contains the newest 100 matches, or all matches when fewer exist. The next page is requested before the final 25 loaded rows are exhausted. The 500-row maximum targets a five-page active window and is above Paging's required 150-row minimum (`pageSize + 2 * prefetchDistance`), so old pages can be evicted and later reloaded from Room. Paging treats the cap as best effort to preserve its prefetch window, but the working set no longer grows with the complete result. Room supplies a `PagingSource`; snapshot replacement and query replacement invalidate obsolete sources.
 
 ### Aggregates and options
 
