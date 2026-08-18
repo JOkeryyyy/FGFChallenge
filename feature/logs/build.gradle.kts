@@ -18,6 +18,15 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Mirrors the app's Macrobenchmark target so this module's `benchmark` source set — the
+    // deterministic 100k fixture and its refresher — is selected instead of falling back to release.
+    buildTypes {
+        create("benchmark") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

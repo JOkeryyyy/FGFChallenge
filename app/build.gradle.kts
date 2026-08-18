@@ -27,6 +27,15 @@ android {
                 enable = false
             }
         }
+        // The Macrobenchmark target: release-like and non-debuggable, so measurements reflect the
+        // shipping configuration, but signed with the debug key so it installs without a release
+        // keystore. `documentation/performanceBenchmark.md` is the protocol that consumes it.
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -48,6 +57,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+    // Benchmark-target only: Macrobenchmark needs ProfileInstaller in the measured APK, and
+    // adding it here leaves the release dependency scope untouched.
+    add("benchmarkImplementation", libs.androidx.profileinstaller)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

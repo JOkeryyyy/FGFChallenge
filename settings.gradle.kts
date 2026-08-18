@@ -26,6 +26,7 @@ enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 rootProject.name = "fgf-challenge"
 include(
     ":app",
+    ":benchmark",
     ":core:designsystem",
     ":core:network",
     ":feature:logs",

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Makes the non-debuggable benchmark target traceable by shell without changing production manifests. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <profileable android:shell="true" />
+    </application>
+</manifest>

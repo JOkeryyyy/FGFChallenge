@@ -19,12 +19,18 @@ lifecycle = "2.11.0"
 room = "2.8.4"
 paging = "3.5.1"
 assertk = "0.28.1"
+benchmark = "1.4.1"
+profileInstaller = "1.4.1"
+uiAutomator = "2.4.0"
 turbine = "1.2.1"
 ktlint = "1.8.0"
 robolectric = "4.16.1"
 
 [libraries]
+androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmark" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileInstaller" }
+androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiAutomator" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -70,6 +76,7 @@ turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
+android-test = { id = "com.android.test", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
