@@ -1,3 +1,5 @@
+import com.android.build.api.variant.HostTestBuilder
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
@@ -34,6 +36,15 @@ android {
 
     buildFeatures {
         compose = true
+    }
+}
+
+// AGP 9 creates host tests only for the `testBuildType`, so the benchmark fixture's contract tests
+// would have no task to run in. They are unit tests of benchmark-only source, so the variant that
+// owns that source is the one that must be able to test it.
+androidComponents {
+    beforeVariants(selector().withBuildType("benchmark")) { variantBuilder ->
+        variantBuilder.hostTests[HostTestBuilder.UNIT_TEST_TYPE]?.enable = true
     }
 }
 
