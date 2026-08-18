@@ -88,6 +88,16 @@ import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.roundToLong
 
+/**
+ * Held rather than rebuilt per call: the title formats two counts on every recomposition, and the
+ * bar recomposes on every paged update because it reads the loaded-row count. `getIntegerInstance`
+ * clones a cached prototype, so calling it there allocated a `DecimalFormat` per number rendered.
+ *
+ * `NumberFormat` is not thread-safe; this one is only ever touched from composition, on the main
+ * thread. The equivalent formatters in `LogEntryUiMapper` are held the same way.
+ */
+private val COUNT_FORMAT: NumberFormat = NumberFormat.getIntegerInstance(Locale.US)
+
 private val SortIconSize = 18.dp
 private val SummaryRingPlaceholderSize = 72.dp
 private val SummaryTextPlaceholderHeight = 16.dp
@@ -863,4 +873,4 @@ private fun LazyPagingItems<LogViewerListItem>.loadedRowCount(): Int = itemSnaps
  * The locale is fixed because the prototype ships English-only copy and the visual goldens must
  * render the same text on every machine.
  */
-private fun groupedCount(count: Int): String = NumberFormat.getIntegerInstance(Locale.US).format(count)
+private fun groupedCount(count: Int): String = COUNT_FORMAT.format(count)

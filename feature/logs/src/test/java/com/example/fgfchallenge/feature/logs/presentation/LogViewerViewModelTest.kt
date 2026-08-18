@@ -21,6 +21,7 @@ import com.example.fgfchallenge.feature.logs.data.model.Severity
 import com.example.fgfchallenge.feature.logs.presentation.model.LogSortOrder
 import com.example.fgfchallenge.feature.logs.presentation.model.LogViewerListItem
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -189,14 +190,33 @@ class LogViewerViewModelTest {
     }
 
     @Test
-    fun `a sort toggle re-queries with the new direction`() {
-        viewModel.onAction(LogViewerAction.SortOrderToggled)
-        assertThat(viewModel.state.value.sortOrder).isEqualTo(LogSortOrder.OldestFirst)
-        assertThat(repository.summaryQueries.last())
-            .isEqualTo(LogQuery(sortDirection = LogSortDirection.OldestFirst))
+    fun `a sort toggle re-queries the rows with the new direction`() =
+        runViewModelTest {
+            viewModel.onAction(LogViewerAction.SortOrderToggled)
+            assertThat(viewModel.state.value.sortOrder).isEqualTo(LogSortOrder.OldestFirst)
+            viewModel.pagedLogs.asSnapshot()
+
+            // The rows are what a direction changes, so the paged query is where it shows.
+            assertThat(repository.pagedQueries.last())
+                .isEqualTo(LogQuery(sortDirection = LogSortDirection.OldestFirst))
+
+            viewModel.onAction(LogViewerAction.SortOrderToggled)
+            assertThat(viewModel.state.value.sortOrder).isEqualTo(LogSortOrder.NewestFirst)
+        }
+
+    @Test
+    fun `a sort toggle does not recount the result`() {
+        repository.emitSummary(LogQuery(), LogSummary(totalCount = 5_000))
+        val countedBefore = repository.summaryQueries.size
+        assertThat(viewModel.state.value.summary).isInstanceOf(LogViewerSummaryState.Ready::class)
 
         viewModel.onAction(LogViewerAction.SortOrderToggled)
-        assertThat(viewModel.state.value.sortOrder).isEqualTo(LogSortOrder.NewestFirst)
+
+        // Reordering rows cannot change how many of each severity match, so the aggregate is
+        // neither restarted nor dropped to Pending — the total stays on screen while the list
+        // re-queries underneath it.
+        assertThat(repository.summaryQueries).hasSize(countedBefore)
+        assertThat(viewModel.state.value.summary).isInstanceOf(LogViewerSummaryState.Ready::class)
     }
 
     @Test
@@ -231,21 +251,33 @@ class LogViewerViewModelTest {
     }
 
     @Test
-    fun `a deliberate commit made mid-typing is not held back by it`() {
-        viewModel.onAction(LogViewerAction.QueryChanged("time"))
-        viewModel.onAction(LogViewerAction.SortOrderToggled)
+    fun `a deliberate commit made mid-typing is not held back by it`() =
+        runViewModelTest {
+            // Collected in the background rather than snapshotted: `asSnapshot` advances virtual
+            // time until the pager is idle, which would settle the very debounce this test is about.
+            backgroundScope.launch { viewModel.pagedLogs.collect {} }
+            mainDispatcherRule.testDispatcher.scheduler.runCurrent()
 
-        // A sort toggle is a decision rather than a character on the way to one, so it re-queries
-        // at once — with the text the database has been given so far, which is still none.
-        assertThat(repository.summaryQueries.last())
-            .isEqualTo(LogQuery(sortDirection = LogSortDirection.OldestFirst))
+            viewModel.onAction(LogViewerAction.QueryChanged("time"))
+            viewModel.onAction(LogViewerAction.SortOrderToggled)
+            // Runs what is already due without moving the clock into the debounce.
+            mainDispatcherRule.testDispatcher.scheduler.runCurrent()
 
-        settleTypedText()
+            // A sort toggle is a decision rather than a character on the way to one, so it
+            // re-queries at once — with the text the database has been given so far, which is still
+            // none. The rows are what a direction changes, so the paged query is where it shows.
+            assertThat(repository.pagedQueries.last())
+                .isEqualTo(LogQuery(sortDirection = LogSortDirection.OldestFirst))
 
-        // And the text that was still being typed then joins it, rather than being lost to it.
-        assertThat(repository.summaryQueries.last())
-            .isEqualTo(LogQuery(literalSearch = "time", sortDirection = LogSortDirection.OldestFirst))
-    }
+            settleTypedText()
+
+            // And the text that was still being typed then joins it, rather than being lost to it.
+            assertThat(repository.pagedQueries.last())
+                .isEqualTo(LogQuery(literalSearch = "time", sortDirection = LogSortDirection.OldestFirst))
+            // The aggregate follows the text but not the direction, so it is counted for the search
+            // alone — no second count for the same rows in the other order.
+            assertThat(repository.summaryQueries.last()).isEqualTo(LogQuery(literalSearch = "time"))
+        }
 
     @Test
     fun `clearing the field returns to the unfiltered list without a wait`() {

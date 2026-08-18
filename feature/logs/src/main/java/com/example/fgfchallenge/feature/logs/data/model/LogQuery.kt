@@ -29,6 +29,18 @@ internal data class LogQuery(
 )
 
 /**
+ * The part of this query the full-result aggregate depends on.
+ *
+ * `LogQuerySql.severityCountSelect` never reads [LogQuery.sortDirection] — reordering rows cannot
+ * change how many of each severity match — so two queries differing only in direction describe one
+ * aggregate. Collapsing the direction to a single value is what lets a caller de-duplicate them.
+ *
+ * The returned value is a criteria key, not a query to page with: its [LogQuery.sortDirection] is
+ * canonical rather than the user's, and only the count select may be built from it.
+ */
+internal fun LogQuery.aggregateCriteria(): LogQuery = copy(sortDirection = LogSortDirection.NewestFirst)
+
+/**
  * Direction of the deterministic timestamp-then-ID ordering every select applies.
  *
  * This is the data layer's own type rather than presentation's `LogSortOrder`: the repository

@@ -9,6 +9,7 @@ import androidx.paging.map
 import com.example.fgfchallenge.feature.logs.data.error.Result
 import com.example.fgfchallenge.feature.logs.data.model.LogEntry
 import com.example.fgfchallenge.feature.logs.data.model.LogQuery
+import com.example.fgfchallenge.feature.logs.data.model.aggregateCriteria
 import com.example.fgfchallenge.feature.logs.data.repository.LogsRepository
 import com.example.fgfchallenge.feature.logs.presentation.model.LogFilterSelection
 import com.example.fgfchallenge.feature.logs.presentation.model.LogViewerListItem
@@ -113,6 +114,18 @@ internal class LogViewerViewModel
             combine(_state, settledSearchText) { state, searchText ->
                 state.copy(query = searchText).activeLogQuery()
             }.distinctUntilChanged()
+
+        /**
+         * The criteria the full-result aggregate is counted for, which is [activeQuery] without its
+         * direction.
+         *
+         * A sort toggle changes which rows come first; it cannot change how many of each severity
+         * match. Keying the aggregate on the whole query made every toggle restart a count whose
+         * answer was already known — two full scans of the snapshot on the search path — and drop
+         * the displayed total to "counting" while they ran.
+         */
+        private val activeAggregateCriteria: Flow<LogQuery> =
+            activeQuery.map(LogQuery::aggregateCriteria).distinctUntilChanged()
 
         /**
          * The list, as display-ready items grouped under UTC minute headers.
@@ -335,19 +348,24 @@ internal class LogViewerViewModel
         }
 
         /**
-         * Applies a change to the query inputs and, if it produced different criteria, drops the
-         * summary in the *same* state value.
+         * Applies a change to the query inputs and, if it produced different *counting* criteria,
+         * drops the summary in the *same* state value.
          *
          * Doing it here rather than when the new aggregate is subscribed to is what makes the
          * guarantee structural: no published [LogViewerUiState] ever pairs new criteria with a
          * total counted for the old ones, not even for the frame between the two writes. That
          * matters more than it sounds, because the paged rows change generation at the same moment
          * — a summary left standing would be describing a list that no longer exists.
+         *
+         * The comparison is [aggregateCriteria] rather than the whole query, and has to be: a sort
+         * toggle produces a different query but the same counts, and [observeSummary] deliberately
+         * does not restart for one. Comparing the whole query here would drop the total to
+         * "counting" with nothing left running to ever replace it.
          */
         private fun updateQueryInputs(transform: (LogViewerUiState) -> LogViewerUiState) {
             _state.update { current ->
                 val next = transform(current)
-                if (next.activeLogQuery() == current.activeLogQuery()) {
+                if (next.activeLogQuery().aggregateCriteria() == current.activeLogQuery().aggregateCriteria()) {
                     next
                 } else {
                     next.copy(summary = LogViewerSummaryState.Pending)
@@ -365,10 +383,10 @@ internal class LogViewerViewModel
          */
         private fun observeSummary() {
             viewModelScope.launch {
-                activeQuery.collectLatest { query ->
-                    repository.summary(query).collect { summary ->
+                activeAggregateCriteria.collectLatest { criteria ->
+                    repository.summary(criteria).collect { summary ->
                         _state.update { current ->
-                            if (current.activeLogQuery() != query) {
+                            if (current.activeLogQuery().aggregateCriteria() != criteria) {
                                 current
                             } else {
                                 current.copy(summary = LogViewerSummaryState.Ready(summary.toSeveritySummaryUi()))

@@ -15,7 +15,9 @@ import androidx.room.RoomDatabase
  */
 @Database(
     entities = [LogEntity::class],
-    version = 1,
+    // 2: the traversal indices changed shape. Nothing user-owned is stored here, so the
+    // destructive fallback recreates the table and the next launch refresh refills it.
+    version = 2,
     exportSchema = false,
 )
 internal abstract class LogsDatabase : RoomDatabase() {

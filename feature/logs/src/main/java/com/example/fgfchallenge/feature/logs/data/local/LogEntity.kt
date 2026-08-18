@@ -14,11 +14,18 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = LogEntity.TABLE_NAME,
     indices = [
-        // Ordering and the UTC range filter both drive off the timestamp, so it is the one
-        // column indexed for traversal rather than selection.
-        Index(value = [LogEntity.COLUMN_TIMESTAMP]),
+        // Ordering and the UTC range filter both drive off the timestamp. The ID is carried as the
+        // second column because every select orders by `timestamp, id` — the ID is the tie-breaker
+        // that keeps pages stable — and a timestamp-only index leaves that last term to a temporary
+        // B-tree. It subsumes a single-column timestamp index, so there is no separate one.
+        Index(value = [LogEntity.COLUMN_TIMESTAMP, LogEntity.COLUMN_ID]),
         Index(value = [LogEntity.COLUMN_SEVERITY]),
-        Index(value = [LogEntity.COLUMN_TAG]),
+        // Covers the structured filter categories in the order they narrow: tag is the most
+        // selective and is also the leading column for a tag-only filter and the `DISTINCT tag`
+        // options query, so this subsumes a single-column tag index. Holding all three columns lets
+        // the severity aggregate and the paging count be answered from the index alone, without
+        // touching a single row — which is where most of the filter path's cost was.
+        Index(value = [LogEntity.COLUMN_TAG, LogEntity.COLUMN_SEVERITY, LogEntity.COLUMN_IS_AI_GENERATED]),
     ],
 )
 internal data class LogEntity(
