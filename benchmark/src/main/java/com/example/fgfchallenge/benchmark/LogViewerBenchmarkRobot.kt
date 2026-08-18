@@ -33,7 +33,19 @@ internal class LogViewerBenchmarkRobot(
         if (!device.isScreenOn) {
             device.wakeUp()
         }
-        device.pressMenu()
+        // An upward swipe rather than a key press, run unconditionally. One UI's swipe-lock ignores
+        // the menu key, and a display held awake by `svc power stayon` reports `isScreenOn = true`
+        // while still showing the keyguard — so neither the wake nor a key press is enough, and
+        // there is no reliable way to ask whether the keyguard is up. On an already-unlocked screen
+        // the gesture opens the launcher's app drawer at worst, which the `pressHome()` that follows
+        // this call closes again.
+        device.swipe(
+            device.displayWidth / 2,
+            device.displayHeight * KEYGUARD_SWIPE_START_NUMERATOR / KEYGUARD_SWIPE_DENOMINATOR,
+            device.displayWidth / 2,
+            device.displayHeight * KEYGUARD_SWIPE_END_NUMERATOR / KEYGUARD_SWIPE_DENOMINATOR,
+            KEYGUARD_SWIPE_STEPS,
+        )
         device.waitForIdle(SETTLE_TIMEOUT_MS)
     }
 
@@ -223,5 +235,9 @@ internal class LogViewerBenchmarkRobot(
         private const val SHEET_SWIPE_END_NUMERATOR = 1
         private const val SHEET_SWIPE_DENOMINATOR = 4
         private const val SHEET_SWIPE_STEPS = 20
+        private const val KEYGUARD_SWIPE_START_NUMERATOR = 4
+        private const val KEYGUARD_SWIPE_END_NUMERATOR = 1
+        private const val KEYGUARD_SWIPE_DENOMINATOR = 5
+        private const val KEYGUARD_SWIPE_STEPS = 15
     }
 }
