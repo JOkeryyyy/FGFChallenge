@@ -1,4 +1,4 @@
-package com.example.fgfchallenge.feature.logs.presentation
+package com.example.fgfchallenge.feature.logs.presentation.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,6 +11,7 @@ import com.example.fgfchallenge.feature.logs.data.model.LogEntry
 import com.example.fgfchallenge.feature.logs.data.model.LogQuery
 import com.example.fgfchallenge.feature.logs.data.model.aggregateCriteria
 import com.example.fgfchallenge.feature.logs.data.repository.LogsRepository
+import com.example.fgfchallenge.feature.logs.presentation.activeLogQuery
 import com.example.fgfchallenge.feature.logs.presentation.model.LogViewerListItem
 import com.example.fgfchallenge.feature.logs.presentation.model.minuteHeaderBetween
 import com.example.fgfchallenge.feature.logs.presentation.model.toListItem
@@ -36,11 +37,11 @@ import javax.inject.Inject
 
 /**
  * The log viewer's screen-level state producer: it owns the single immutable
- * [StateFlow]`<`[LogViewerUiState]`>` the screen renders, the separate paged-row stream Paging
+ * [kotlinx.coroutines.flow.StateFlow]`<`[LogViewerUiState]`>` the screen renders, the separate paged-row stream Paging
  * drives, and is the only place a [LogViewerAction] turns into a state change.
  *
  * It is also the whole of the app's query coordination. The screen's inputs become one canonical
- * [LogQuery] through [toLogQuery], and that single value is handed to both repository reads, so the
+ * [com.example.fgfchallenge.feature.logs.data.model.LogQuery] through [com.example.fgfchallenge.feature.logs.presentation.toLogQuery], and that single value is handed to both repository reads, so the
  * rows and the counts describe the same criteria by construction rather than by agreement between
  * two call sites. There is no domain layer, use case, or repository wrapper between them: this
  * one-screen prototype has nothing to reuse them for.
@@ -72,7 +73,7 @@ internal class LogViewerViewModel
          *
          * The field itself stays search-as-you-type — [LogViewerUiState.query] is updated on the
          * keystroke and the text renders immediately — but each keystroke would otherwise be a new
-         * [LogQuery], and every new query starts *two* pieces of database work: a fresh Pager and a
+         * [com.example.fgfchallenge.feature.logs.data.model.LogQuery], and every new query starts *two* pieces of database work: a fresh Pager and a
          * fresh full-result aggregate over the whole filtered set. Typing a seven-character word
          * that way costs seven of each, six of them cancelled before they are read. Waiting for the
          * typing to stop collapses that to one.

@@ -1,4 +1,4 @@
-package com.example.fgfchallenge.feature.logs.presentation
+package com.example.fgfchallenge.feature.logs.presentation.ui
 
 import androidx.compose.runtime.Immutable
 import com.example.fgfchallenge.core.designsystem.model.LogDetailsUi
@@ -7,6 +7,7 @@ import com.example.fgfchallenge.feature.logs.presentation.model.LogFilterSelecti
 import com.example.fgfchallenge.feature.logs.presentation.model.LogSortOrder
 import com.example.fgfchallenge.feature.logs.presentation.model.SeveritySummaryUi
 import com.example.fgfchallenge.feature.logs.presentation.model.latencyExtent
+import com.example.fgfchallenge.feature.logs.presentation.toLogQuery
 
 /**
  * The log viewer's complete *bounded* screen state: one immutable value produced by

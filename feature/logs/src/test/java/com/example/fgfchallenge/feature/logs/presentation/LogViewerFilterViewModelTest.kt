@@ -12,6 +12,10 @@ import com.example.fgfchallenge.feature.logs.data.model.LogSummary
 import com.example.fgfchallenge.feature.logs.data.model.Severity
 import com.example.fgfchallenge.feature.logs.presentation.model.AiGeneratedFilter
 import com.example.fgfchallenge.feature.logs.presentation.model.LogFilterSelection
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerAction
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerSummaryState
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerViewModel
+import com.example.fgfchallenge.feature.logs.presentation.ui.activeFilterCount
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test

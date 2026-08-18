@@ -1,4 +1,4 @@
-package com.example.fgfchallenge.feature.logs.presentation
+package com.example.fgfchallenge.feature.logs.presentation.ui
 
 import androidx.compose.runtime.Composable
 import androidx.paging.LoadState
@@ -105,7 +105,8 @@ internal object LogViewerFixtures {
         )
 
     /** Launch refresh in flight: skeletons, and no summary to report yet. */
-    val loadingState: LogViewerUiState = LogViewerUiState(refresh = LogViewerRefreshState.InProgress)
+    val loadingState: LogViewerUiState =
+        LogViewerUiState(refresh = LogViewerRefreshState.InProgress)
 
     /** A completed refresh with the whole snapshot matching. */
     fun allLogsState(): LogViewerUiState =

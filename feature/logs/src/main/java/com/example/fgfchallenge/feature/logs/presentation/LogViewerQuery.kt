@@ -6,6 +6,7 @@ import com.example.fgfchallenge.feature.logs.presentation.model.AiGeneratedFilte
 import com.example.fgfchallenge.feature.logs.presentation.model.LogFilterSelection
 import com.example.fgfchallenge.feature.logs.presentation.model.LogSortOrder
 import com.example.fgfchallenge.feature.logs.presentation.model.latencyExtent
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerUiState
 import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneOffset

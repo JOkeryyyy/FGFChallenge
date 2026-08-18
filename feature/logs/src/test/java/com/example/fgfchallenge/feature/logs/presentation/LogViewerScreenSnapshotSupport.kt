@@ -6,6 +6,10 @@ import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import com.android.resources.Density
 import com.example.fgfchallenge.core.designsystem.theme.FGFChallengeTheme
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerFixture
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerScreen
+import com.example.fgfchallenge.feature.logs.presentation.ui.logViewerFixtureItems
+import com.example.fgfchallenge.feature.logs.presentation.ui.logViewerFixtureState
 
 /*
  * Shared device configurations and the single render entry point used by the log viewer's Paparazzi

@@ -9,13 +9,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.example.fgfchallenge.core.designsystem.theme.FGFChallengeTheme
-import com.example.fgfchallenge.feature.logs.presentation.LogFilterSheetHost
-import com.example.fgfchallenge.feature.logs.presentation.LogViewerAction
-import com.example.fgfchallenge.feature.logs.presentation.LogViewerFixture
-import com.example.fgfchallenge.feature.logs.presentation.LogViewerScreen
-import com.example.fgfchallenge.feature.logs.presentation.LogViewerViewModel
-import com.example.fgfchallenge.feature.logs.presentation.logViewerFixtureItems
-import com.example.fgfchallenge.feature.logs.presentation.logViewerFixtureState
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogFilterSheetHost
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerAction
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerFixture
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerScreen
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerViewModel
+import com.example.fgfchallenge.feature.logs.presentation.ui.logViewerFixtureItems
+import com.example.fgfchallenge.feature.logs.presentation.ui.logViewerFixtureState
 
 /**
  * The log viewer's only public entry point, composed by `:app`.

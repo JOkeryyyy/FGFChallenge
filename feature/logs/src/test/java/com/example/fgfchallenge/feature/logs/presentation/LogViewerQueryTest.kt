@@ -9,6 +9,7 @@ import com.example.fgfchallenge.feature.logs.data.model.Severity
 import com.example.fgfchallenge.feature.logs.presentation.model.AiGeneratedFilter
 import com.example.fgfchallenge.feature.logs.presentation.model.LogFilterSelection
 import com.example.fgfchallenge.feature.logs.presentation.model.LogSortOrder
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerUiState
 import org.junit.Test
 import java.time.Instant
 import java.time.LocalDate

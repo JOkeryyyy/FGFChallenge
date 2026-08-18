@@ -1,4 +1,4 @@
-package com.example.fgfchallenge.feature.logs.presentation
+package com.example.fgfchallenge.feature.logs.presentation.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect

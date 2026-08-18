@@ -16,6 +16,13 @@ import com.example.fgfchallenge.core.designsystem.model.SeverityLegendItem
 import com.example.fgfchallenge.feature.logs.presentation.model.LogSortOrder
 import com.example.fgfchallenge.feature.logs.presentation.model.LogViewerListItem
 import com.example.fgfchallenge.feature.logs.presentation.model.toDensityUi
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerFixtures
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerRefreshState
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerSummaryState
+import com.example.fgfchallenge.feature.logs.presentation.ui.activeFilterCount
+import com.example.fgfchallenge.feature.logs.presentation.ui.hasNoMatches
+import com.example.fgfchallenge.feature.logs.presentation.ui.showsRefreshFailure
+import com.example.fgfchallenge.feature.logs.presentation.ui.showsStaleSnapshotNotice
 import org.junit.Test
 
 /** One header paired with the rows that follow it, which is what the flat list renders. */

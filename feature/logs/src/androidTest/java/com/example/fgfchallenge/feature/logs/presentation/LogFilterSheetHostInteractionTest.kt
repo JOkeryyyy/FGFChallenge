@@ -12,6 +12,7 @@ import com.example.fgfchallenge.feature.logs.data.model.LogFilterOptions
 import com.example.fgfchallenge.feature.logs.data.model.Severity
 import com.example.fgfchallenge.feature.logs.presentation.model.AiGeneratedFilter
 import com.example.fgfchallenge.feature.logs.presentation.model.LogFilterSelection
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogFilterSheetHost
 import org.junit.Rule
 import org.junit.Test
 

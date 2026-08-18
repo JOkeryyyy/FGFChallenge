@@ -20,18 +20,24 @@ import com.example.fgfchallenge.feature.logs.data.model.LogSummary
 import com.example.fgfchallenge.feature.logs.data.model.Severity
 import com.example.fgfchallenge.feature.logs.presentation.model.LogSortOrder
 import com.example.fgfchallenge.feature.logs.presentation.model.LogViewerListItem
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerAction
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerFixtures
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerRefreshState
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerSummaryState
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerViewModel
+import com.example.fgfchallenge.feature.logs.presentation.ui.hasNoMatches
+import com.example.fgfchallenge.feature.logs.presentation.ui.showsRefreshFailure
+import com.example.fgfchallenge.feature.logs.presentation.ui.showsStaleSnapshotNotice
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import java.time.Instant
 
 /**
- * Behavior tests for `LogViewerViewModel`: what each [LogViewerAction] does to the single state
+ * Behavior tests for `LogViewerViewModel`: what each [com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerAction] does to the single state
  * value, which query value reaches the repository, what the paged stream produces from it, and —
  * just as importantly — what each leaves alone.
  *

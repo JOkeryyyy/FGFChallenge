@@ -1,4 +1,4 @@
-package com.example.fgfchallenge.feature.logs.presentation
+package com.example.fgfchallenge.feature.logs.presentation.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -56,7 +56,6 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.style.TextOverflow
@@ -198,10 +197,17 @@ internal fun LogViewerScreen(
         // One centered pane: it grows with the window up to Dimens.contentMaxWidth and then stops,
         // so log rows never stretch into unscannable full-width lines on a large screen.
         Box(
-            modifier = Modifier.fillMaxSize().padding(contentPadding),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(contentPadding),
             contentAlignment = Alignment.TopCenter,
         ) {
-            val pane = Modifier.widthIn(max = Dimens.contentMaxWidth).fillMaxSize().padding(top = Spacing.sm)
+            val pane =
+                Modifier
+                    .widthIn(max = Dimens.contentMaxWidth)
+                    .fillMaxSize()
+                    .padding(top = Spacing.sm)
             if (state.refresh is LogViewerRefreshState.InProgress) {
                 // Skeletons rather than the stored rows: until the refresh resolves, nothing known
                 // about the snapshot is worth presenting as the current result.
@@ -491,7 +497,7 @@ private fun ExpandedSearchField(
 }
 
 /**
- * The summary card sits above exactly one flat [LazyColumn]. The list is the only scrolling region,
+ * The summary card sits above exactly one flat [androidx.compose.foundation.lazy.LazyColumn]. The list is the only scrolling region,
  * so the density reading stays in view while scanning results — and the counts, filter, search, and
  * sort controls stay in view above it, in the pinned app bar.
  */
@@ -523,7 +529,11 @@ private fun LogViewerContent(
         LazyColumn(
             // Only the list itself is tagged: scrolling is a list-level gesture, and rows stay keyed
             // by the production stable IDs rather than gaining per-row automation tags.
-            modifier = Modifier.testTag(LIST_TEST_TAG).fillMaxWidth().weight(1f),
+            modifier =
+                Modifier
+                    .testTag(LIST_TEST_TAG)
+                    .fillMaxWidth()
+                    .weight(1f),
             contentPadding =
                 PaddingValues(
                     start = Dimens.screenHorizontalPadding,
@@ -648,7 +658,10 @@ private fun LazyListScope.appendStateItem(logs: LazyPagingItems<LogViewerListIte
 @Composable
 private fun AppendProgress(modifier: Modifier = Modifier) {
     Row(
-        modifier = modifier.fillMaxWidth().padding(Spacing.md),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(Spacing.md),
         horizontalArrangement = Arrangement.spacedBy(Spacing.xs, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -674,7 +687,10 @@ private fun ListLoadError(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.fillMaxWidth().padding(Spacing.md),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(Spacing.md),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(Spacing.xxs),
     ) {
@@ -791,7 +807,12 @@ private fun SeverityIndicatorPlaceholder(modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             repeat(3) {
-                SummarySkeleton(modifier = Modifier.fillMaxWidth().height(SummaryTextPlaceholderHeight))
+                SummarySkeleton(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(SummaryTextPlaceholderHeight),
+                )
             }
         }
     }

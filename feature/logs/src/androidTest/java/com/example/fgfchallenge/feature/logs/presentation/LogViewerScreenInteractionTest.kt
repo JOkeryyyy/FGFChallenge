@@ -13,9 +13,15 @@ import androidx.test.espresso.Espresso
 import assertk.assertThat
 import assertk.assertions.containsExactly
 import assertk.assertions.isEmpty
-import assertk.assertions.isEqualTo
 import com.example.fgfchallenge.core.designsystem.theme.FGFChallengeTheme
 import com.example.fgfchallenge.feature.logs.presentation.model.LogSortOrder
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerAction
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerFixture
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerFixtures
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerScreen
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerUiState
+import com.example.fgfchallenge.feature.logs.presentation.ui.logViewerFixtureItems
+import com.example.fgfchallenge.feature.logs.presentation.ui.logViewerFixtureState
 import org.junit.Rule
 import org.junit.Test
 
