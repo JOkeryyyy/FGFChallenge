@@ -314,3 +314,8 @@ Code quality: use ktlint on every commit
 - Tool: Codex
 - Task: Move the Logs feature presentation from the legacy `:feature:logs` bridge into the final `:feature:logs:presentation` module and switch the application dependency graph.
 - Key prompt: Preserve all existing presentation packages, resources, tests, assertions, and screenshots; establish a structural RED before moving implementation; add the release-like benchmark bridge; remove the legacy module; verify debug and benchmark variants.
+
+- Date: 2026-08-18
+- Tool: Codex
+- Task: Synchronize delivery documentation and CI after the final Logs data/presentation module split.
+- Key prompt: Update active architecture, data-layer, roadmap, README, and CI task-path documentation for `:feature:logs:data` and `:feature:logs:presentation`; retain feature-owned Room, the repository-only data boundary, and no domain or generic database module; preserve historical records while verifying obsolete active paths are removed.

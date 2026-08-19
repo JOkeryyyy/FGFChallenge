@@ -35,9 +35,10 @@ jobs:
             lintDebug \
             testDebugUnitTest \
             :core:designsystem:verifyPaparazziDebug \
-            :feature:logs:verifyPaparazziDebug \
+            :feature:logs:presentation:verifyPaparazziDebug \
             :app:assembleDebug \
             :app:compileDebugAndroidTestSources \
             :core:designsystem:compileDebugAndroidTestSources \
-            :feature:logs:compileDebugAndroidTestSources \
+            :feature:logs:presentation:compileDebugAndroidTestSources \
+            :feature:logs:data:testBenchmarkUnitTest \
             --stacktrace

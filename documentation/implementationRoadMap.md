@@ -16,15 +16,24 @@ This roadmap deliberately defines coherent milestones, responsibilities, and exi
 
 | Step | Status | Delivered baseline |
 | --- | --- | --- |
-| 1. Project foundation | Complete | Four-module project, toolchain, Hilt, Compose, CI, and quality gates. |
+| 1. Project foundation | Complete | Five-module production graph, toolchain, Hilt, Compose, CI, and quality gates. |
 | 2. Design system and UI components | Complete | Stateless log-viewer components, deterministic themes, previews, and component tests. |
 | 3. Fixture-backed screen UI | Complete | Full screen states, flat grouped list, responsive layouts, and visual tests. |
 | 4. Basic UI interaction | Complete | Immutable state/actions, ViewModel, sort/query input, and details-sheet interaction. |
 | 5. Network foundation and repository boundary | Complete baseline | Retrofit/OkHttp, endpoint, DTO mapping, one feature-local typed repository failure, cancellation preservation, Hilt wiring, and repository tests. This one-source repository contract is transitional and is expanded in Step 8. |
 | 6. Product and architecture contract alignment | Complete | Requirement, assumptions, wireframe, architecture, data convention, and contributor guidance now describe one Room/Paging prototype system. |
-| 7–13. Query-driven implementation | Not started | Room, Paging 3, combined queries, refresh coordination, simple ViewModel coordination, updated UI, an optional performance smoke test, and focused verification. |
+| 7–11. Query-driven implementation | Complete | Feature-owned Room/Paging, combined queries, refresh coordination, ViewModel coordination, and updated UI. |
+| 12. Optional performance smoke test | Complete (optional) | Benchmark-only deterministic fixture, Macrobenchmark protocol, and observational baseline. |
+| 13. Focused verification and delivery | In progress | Final documentation, automation, verification, and delivery checks. |
 
 ## Revised Target Architecture
+
+The normal production graph has five modules: `:app`,
+`:feature:logs:presentation`, `:feature:logs:data`, `:core:network`, and
+`:core:designsystem`. `:app` depends on presentation and the design system;
+presentation depends on data and the design system; data depends on network.
+Room remains owned by `:feature:logs:data`, with no generic database or domain
+module.
 
 ```mermaid
 flowchart TD
@@ -62,7 +71,8 @@ The architecture must preserve these invariants:
 
 **Work delivered**
 
-- Established `:app`, `:feature:logs`, `:core:network`, and `:core:designsystem`.
+- Established `:app`, `:feature:logs:presentation`, `:feature:logs:data`,
+  `:core:network`, and `:core:designsystem`.
 - Configured the compatible toolchain, Compose, Hilt/KSP, Retrofit, serialization, tests, CI, and the repository-owned pre-commit gate.
 - Established module dependency rules, the theme entry point, and a launchable application shell.
 
@@ -110,7 +120,8 @@ The architecture must preserve these invariants:
 
 **Work delivered**
 
-- Configured the shared Retrofit/OkHttp client and feature-owned logs endpoint.
+- Configured the shared Retrofit/OkHttp client and the Logs data module's
+  feature-owned endpoint.
 - Implemented the one-shot suspending request, DTO mapping, repository-facing application models, and feature-local typed result/failure boundary.
 - Converted connectivity, timeout, HTTP, serialization, schema, and unknown failures into the repository's single retryable failure while preserving coroutine cancellation.
 - Wired the current API and `NetworkLogsRepository` through Hilt and covered the boundary with MockWebServer and fake-API tests.
@@ -141,9 +152,9 @@ The architecture must preserve these invariants:
 
 **Work**
 
-- Add Room and Paging 3 to `:feature:logs`; keep the database feature-owned because no other feature consumes log storage. Do not add a generic `:core:database` module without a second consumer.
-- Define an internal persistence entity for every queryable field: ID, UTC timestamp, severity, tag, message, latency, AI-generated flag, and response session ID.
-- Add the Room database, DAO, entity mapping, bindings in the existing feature-owned `LogsDataModule`, and the small set of indexes needed by the implemented queries. Split another DI module only if ownership, component, or lifetime genuinely differs; add further indexes only when the supplied fixture exposes an actual need.
+- Add Room and Paging 3 to `:feature:logs:data`; keep the database feature-owned because no other feature consumes log storage. Do not add a generic `:core:database` module without a second consumer.
+- Define an internal persistence entity in the data module for every queryable field: ID, UTC timestamp, severity, tag, message, latency, AI-generated flag, and response session ID.
+- Add the Room database, DAO, entity mapping, and bindings in the data module's feature-owned `LogsDataModule`, plus the small set of indexes needed by the implemented queries. Split another DI module only if ownership, component, or lifetime genuinely differs; add further indexes only when the supplied fixture exposes an actual need.
 - Store timestamps in a persistence representation that preserves exact UTC ordering and deterministic timestamp/ID tie-breaking.
 - Implement a parameterized predicate builder shared by the paged-select and aggregate-select paths. Never concatenate user input into SQL.
 - Escape SQLite wildcard characters so search text is treated as a literal case-insensitive substring rather than an accidental `%` or `_` pattern.
@@ -168,7 +179,7 @@ The architecture must preserve these invariants:
 **Network/data-layer work**
 
 - Retain Retrofit/OkHttp as a one-shot remote source. Do not simulate server pagination or expose remote DTOs outside data.
-- Evolve the current single-source `NetworkLogsRepository` into a repository that coordinates the remote endpoint and the feature-owned Room database; rename the implementation so its name reflects the new multi-source strategy.
+- Evolve the current single-source `NetworkLogsRepository` into a `:feature:logs:data` repository that coordinates the remote endpoint and its feature-owned Room database; rename the implementation so its name reflects the new multi-source strategy.
 - Split the repository contract into operations with distinct lifecycles:
   - a suspending startup refresh that fetches, maps, and replaces the snapshot;
   - a Flow of `PagingData` for an immutable query;
@@ -203,7 +214,7 @@ This one-screen prototype does not justify a standalone domain layer. Keep the i
 
 **Work**
 
-- Replace fixture-owned list content with repository-backed data.
+- Replace fixture-owned list content in `:feature:logs:presentation` with repository-backed data.
 - Keep exactly one immutable `StateFlow<LogViewerUiState>` for small screen state: immediate query text, applied filters, filter draft/visibility, sort, startup refresh state, aggregate summary, filter options, and selected-log state.
 - Expose the list as a separate `Flow<PagingData<LogViewerListItem>>`; never place `PagingData`, all database rows, or all matching UI models inside `LogViewerUiState`.
 - Configure Paging with `pageSize = 100`, `initialLoadSize = 100`, placeholders disabled, and a prefetch distance that requests the next page around the final 20–30 rows rather than waiting for item 100.
@@ -336,7 +347,7 @@ This one-screen prototype does not justify a standalone domain layer. Keep the i
 
 - The remote response is one authoritative complete snapshot, not a delta. Each successful launch replaces the prior local snapshot.
 - Room is required as the local source of truth and Paging 3 is required for list delivery; neither remains a non-goal.
-- The initial implementation keeps feature-specific persistence inside `:feature:logs`.
+- The implementation keeps feature-specific persistence inside `:feature:logs:data`.
 - No standalone domain layer is required; repository contracts remain owned by data and the ViewModel derives the immutable query input.
 - Search begins with parameterized Room/SQLite `LIKE`; do not add alternate search technology without an observed prototype need.
 - Material 3 date/range and time pickers plus `RangeSlider` are the standard controls for date/time and latency filtering.

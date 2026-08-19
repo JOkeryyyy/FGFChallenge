@@ -11,11 +11,17 @@ illustrative example below (module/package layout, a specific class name, whethe
 `DataSource` abstraction exists for the logs feature), `ARCHITECTURE.md` wins. For this
 project specifically:
 
+- The five normal production modules are `:app`, `:feature:logs:presentation`,
+  `:feature:logs:data`, `:core:network`, and `:core:designsystem`. The Logs
+  dependency path is `:app` → `:feature:logs:presentation` →
+  `:feature:logs:data` → `:core:network`; presentation also depends on the
+  design system. The data module owns the feature's Room database rather than
+  introducing a generic database module.
 - The approved data package layout is `data/remote`, `data/local`, `data/model`,
   `data/mapper`, `data/repository`, `data/error`, and `data/di` (see
-  `ARCHITECTURE.md` → *Gradle modules*). This one-screen prototype does not require a
-  `domain/query` package. The flat `data/LogsRepository.kt` layouts below remain
-  illustrative rather than literal.
+  `ARCHITECTURE.md` → *Gradle modules*) inside `:feature:logs:data`. This
+  one-screen prototype does not require a `domain/query` package. The flat
+  `data/LogsRepository.kt` layouts below remain illustrative rather than literal.
 - Step 5's `NetworkLogsRepository` is a transitional remote-only baseline. Step 8
   replaces it with `SnapshotLogsRepository`, named for its complete-remote-snapshot to
   Room strategy, rather than the generic `DefaultLogsRepository` used in examples.
@@ -31,7 +37,7 @@ project specifically:
   apply equally to Hilt constructor injection.
 - Use this project's existing typed `Result<T, E : Error>` / `EmptyResult` wrapper and
   its `map`/`onSuccess`/`onFailure` helpers rather than redefining a parallel `Result`
-  type — see §11. It lives in `:feature:logs`, not `:core:network`.
+  type — see §11. It lives in `:feature:logs:data`, not `:core:network`.
 - The feature's repository failure is a single `LogsDataError` value, not the multi-case
   hierarchy the illustrative example in §11 shows — see *Match error granularity to
   behavior* in that section.
@@ -229,7 +235,7 @@ Repository contracts belong to the Data Layer, not the Domain Layer.
 Example:
 
 ```text
-feature/logs/
+feature/sample/
 ├── data/
 │   ├── LogsRepository.kt
 │   └── DefaultLogsRepository.kt
@@ -523,7 +529,7 @@ In this project, reuse the existing `Result<T, E : Error>` / `EmptyResult` wrapp
 type — one typed-result convention per codebase avoids ambiguity between it and
 `kotlin.Result` from the standard library.
 
-The wrapper stays in `:feature:logs`. It is a result convention, not network
+The wrapper stays in `:feature:logs:data`. It is a result convention, not network
 infrastructure, so it does not belong in `:core:network`; promote it to a neutral shared
 module only when a second feature genuinely reuses it.
 
@@ -690,7 +696,7 @@ Do not introduce `LogDomainModel` simply because a Domain Layer exists.
 ### Simple Feature — No Domain Layer
 
 ```text
-feature/logs/
+feature/sample/
 ├── data/
 │   ├── model/
 │   │   └── LogEntry.kt
@@ -720,7 +726,7 @@ presentation
 ### Feature with a Justified Domain Layer
 
 ```text
-feature/logs/
+feature/sample/
 ├── data/
 │   ├── LogsRepository.kt
 │   ├── DefaultLogsRepository.kt
@@ -745,11 +751,13 @@ presentation
 
 The Repository interface remains in `data`.
 
-> This project's approved `feature/logs` layout is documented in `ARCHITECTURE.md` →
-> *Gradle modules* (`data/remote`, `data/local`, `data/model`, `data/mapper`,
-> `data/repository`, `data/error`, `data/di`). Treat the layouts above as generic
-> illustrations of the dependency direction and the "Repository interface lives in
-> `data`" rule, not as a literal restructuring of this project.
+> This project uses separate `:feature:logs:presentation` and
+> `:feature:logs:data` modules. The data module owns `data/remote`, `data/local`,
+> `data/model`, `data/mapper`, `data/repository`, `data/error`, and `data/di`,
+> including feature-owned Room; the presentation module depends only on the data
+> contract and the design system. There is no domain module. Treat the layouts above
+> as generic illustrations of dependency direction and the "Repository interface
+> lives in data" rule, not as a literal restructuring of this project.
 
 ## 16. Testing Boundaries
 
