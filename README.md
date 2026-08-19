@@ -100,7 +100,51 @@ into `benchmark-results/<run-id>/`, which is git-ignored, and fill in
 [`documentation/performance-run-template.md`](documentation/performance-run-template.md).
 Compare only runs from the same device under matching recorded system state.
 
-## Module graph
+### Latest run highlights
+
+From the most recent recorded run (`2026-08-19-oneui25-run-03`, ten measured
+iterations per scenario, physical Galaxy S9+ / API 29, 100,000-row fixture):
+
+- **Combined filter is the fastest end-to-end interaction of the four
+  scenarios: 521.6 ms median** to apply `tag = network AND severity IN
+  (ERROR, FATAL) AND is_ai_generated = 1` across all 100,000 rows — query,
+  full-result aggregate, first page, and redraw included.
+- **Scrolling is close to frame-perfect: only 1.9% of frames (7 of 370)**
+  exceeded the 16.7 ms / 60 Hz budget while scrolling the 100,000-row Room/Paging snapshot, with a 7.9 ms median frame
+  time.
+- **Search resolves a full literal scan of all 100,000 rows in 1.35 s
+  median** — debounce, the `%timed out%` message/ID scan, the severity
+  aggregate, and the first page, for 20,020 matches.
+
+Both the filter and search figures beat this device's first recorded
+baseline run. Full per-iteration numbers, frame-timing percentiles for every
+scenario (including the weaker `crossFirstPagingBoundary` and the
+frame-count caveats on `applyCombinedFilter`), and run incidents are filed in
+`benchmark-results/2026-08-19-oneui25-run-03/run.md` — git-ignored local
+evidence, per the note above, not part of this repository's tracked history.
+
+### Manual profiler capture
+
+In addition to the automated Macrobenchmark suite above, Filtering, Search,
+and Scroll were manually profiled with the Android Studio Profiler's System
+Trace capture against the same simulated ~100,000-row dataset (seeded via the
+`benchmark` build variant), on a physical 2018 Samsung Galaxy S9. No
+significant dropped frames were observed in any of the three captures.
+
+| Filtering (latency range) | Search | Scroll |
+| --- | --- | --- |
+| ![Filtering profiler trace](documentation/profiler/filtering-latency.png) | ![Search profiler trace](documentation/profiler/search.png) | ![Scroll profiler trace](documentation/profiler/scroll.png) |
+
+This was an exploratory manual check, not the recorded Macrobenchmark
+scenarios above; it is likewise observational and not a delivery gate.
+
+## Architecture
+
+The app follows Google's recommended (layered, unidirectional-data-flow)
+Android app architecture — not Uncle Bob's Clean Architecture — combined with
+a **hybrid/grid modularization**: two infrastructure modules at the base, and
+one feature module split vertically into `data` and `presentation` layers on
+top of them.
 
 ```
 :app -> :feature:logs:presentation
@@ -117,9 +161,88 @@ Core modules never depend on app or feature modules.
 | `:app` | Composition root: Hilt application, single activity, themes and composes `:feature:logs:presentation`. |
 | `:feature:logs:presentation` | Public `LogsFeature()` entry point, ViewModel/query coordination, display mapping, Compose UI, and feature visual/interaction tests. |
 | `:feature:logs:data` | Feature-owned Room database, remote API/DTOs, repository contract and implementation, query builder, and data/benchmark tests. |
-| `:core:network` | Retrofit/OkHttp/Kotlinx Serialization networking infrastructure. |
-| `:core:designsystem` | Shared Compose Material 3 theme (`FGFChallengeTheme`) and design-system building blocks. |
+| `:core:network` | Retrofit/OkHttp/Kotlinx Serialization networking infrastructure, shared by any feature that needs it. |
+| `:core:designsystem` | Shared Compose Material 3 theme (`FGFChallengeTheme`) and stateless design-system building blocks, independent of any feature, data, Room, or Paging type. |
 | `:benchmark` | Optional out-of-process Macrobenchmark test APK. It measures `:app`'s benchmark variant and is never part of a shipping build. |
+
+`:core:network` and `:core:designsystem` are infrastructure modules — networking
+plumbing and reusable UI components — with no feature knowledge. The single
+`:feature:logs` slice is further split into `:data` and `:presentation` so the
+Room/Retrofit/mapping layer and the ViewModel/Compose layer are independently
+buildable and testable, and depends on `:core:network`. `:feature:logs:presentation`
+depends on `:feature:logs:data`'s repository/model contract and on
+`:core:designsystem`, never the reverse.
+
+For a single-screen prototype this is admittedly more ceremony than the
+feature strictly needs — a package-private split inside one module would work
+just as well functionally. The module boundary was chosen deliberately anyway,
+to demonstrate the module graph, dependency direction, and layer boundaries a
+production-sized app would use, rather than to solve a real reuse problem this
+prototype has today.
+
+Search, filters, minute grouping, ordering, aggregates, and details all read
+from Room after the one-shot launch refresh; there is no standalone domain
+layer, since query coordination in the ViewModel is the appropriately small
+solution at this size.
+
+## Data flow and paging
+
+On every app launch, the app makes one call to the supplied endpoint, decodes
+and maps the response, and atomically replaces the feature-owned Room
+snapshot with it in a single transaction. From that point on, Room — not the
+network response and not in-memory state — is the source of truth for rows,
+counts, severity density, filter options, and details.
+
+Rows are grouped by UTC minute for display. For a dataset this size, remote
+(server-side) pagination would normally be the right call, but it is out of
+scope for this prototype per `requirement.md`; only client-side pagination
+over Room via Paging 3 is implemented. The list loads the newest 100 rows
+initially and loads 100 more at a time as the user scrolls, prefetching
+before the last 20–30 visible rows are exhausted. Loading is purely a list
+concern, though: search, filters, ordering, and the full-result/severity
+counts always operate over the *complete* matching set in Room, regardless of
+how many rows are currently loaded into the list.
+
+## Search and filtering design
+
+The search bar performs a case-insensitive literal substring match against
+`message` or log `id` only. Every other structured condition — tag,
+severity, the AI-generated flag, a UTC date/time range, and a latency
+range — lives in a separate Filter sheet instead of the search field, for two
+reasons:
+
+- **Better UX per input shape.** Categorical values (tag, severity,
+  AI-generated) and ranges (time, latency) are naturally chip/toggle/range
+  controls, not something a user should have to type and spell correctly in
+  a text field.
+- **Cheaper search-as-you-type.** Because the search bar only ever needs a
+  `LIKE`-style substring scan over two columns, every keystroke stays a light
+  query. Structured predicates are applied once on Filter → Apply rather than
+  re-evaluated on every character typed, which keeps the two concerns from
+  competing for the same query on the hot path.
+
+Active filter categories combine with AND; multiple selected values within
+one category (e.g. several tags) combine with OR. Filter-sheet edits are
+drafts and only reach Room on Apply.
+
+## Testing
+
+- **UI** is covered by screenshot (golden) tests via Paparazzi — one
+  representative test per screen state (loading, error, populated, filtered,
+  no-results, page-refresh, append progress/retry, collapsed group, light/dark,
+  narrow/wide) — run with `./gradlew :feature:logs:presentation:verifyPaparazziDebug`.
+- **Business logic** (query building, mapping, repository/refresh behavior,
+  ViewModel state and query coordination) is covered by focused JVM unit
+  tests, run with `./gradlew testDebugUnitTest`.
+- The existing instrumented Compose interaction tests (`:core:designsystem`
+  and `:feature:logs:presentation`) are retained; no additional
+  interaction-test work was required.
+
+## AI assistance
+
+Claude Code, ChatGPT, and Codex materially contributed to this project's
+architecture, implementation, debugging, and documentation. Every session's
+tool, task, and key prompt are recorded in [`PROMPTS.md`](PROMPTS.md).
 
 ## Prototype scope note
 
