@@ -319,3 +319,8 @@ Code quality: use ktlint on every commit
 - Tool: Codex
 - Task: Synchronize delivery documentation and CI after the final Logs data/presentation module split.
 - Key prompt: Update active architecture, data-layer, roadmap, README, and CI task-path documentation for `:feature:logs:data` and `:feature:logs:presentation`; retain feature-owned Room, the repository-only data boundary, and no domain or generic database module; preserve historical records while verifying obsolete active paths are removed.
+
+- Date: 2026-08-18
+- Tool: Codex
+- Task: Perform final acceptance verification for the Logs module split. The exact acceptance command exited `1` only for the documented `SnapshotLogsRepositoryQueryTest` long-scroll baseline; a forced presentation rerun then passed 150/150 tests, including all 17 Paparazzi cases.
+- Key prompt: Run `./gradlew ktlintCheck lintDebug testDebugUnitTest :feature:logs:data:testBenchmarkUnitTest :feature:logs:presentation:verifyPaparazziDebug :app:assembleDebug :app:assembleBenchmark :app:compileDebugAndroidTestSources :feature:logs:presentation:compileDebugAndroidTestSources`, separate documented baseline failures from new split regressions, and make no product, query, assertion, or screenshot change unless a new integration failure requires it.
