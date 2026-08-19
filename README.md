@@ -20,10 +20,9 @@ sorting, aggregate severity feedback, and details.
 
 ## Performance and profiler evidence
 
-The optional Macrobenchmark suite was recorded on the documented physical One
-UI 2.5 baseline device (Galaxy S9+ / API 29) using the 100,000-row benchmark
-fixture and ten measured iterations per scenario. These are observations, not
-CI or acceptance thresholds.
+The Macrobenchmark suite was recorded on the documented physical One
+UI 2.5 baseline device (Galaxy S9+ / API 29) using the **100,000-row** benchmark
+fixture and ten measured iterations per scenario.
 
 | Scenario | Observation                                                                                                      |
 | --- |------------------------------------------------------------------------------------------------------------------|
@@ -31,7 +30,7 @@ CI or acceptance thresholds.
 | Scroll | **6.59 ms frame time**; **1.9%** of frames (7/370) exceeded the 16.7 ms / 60 Hz budget.                          |
 | Literal search | **1.35 s median** for `timed out` across 20,020 matches, including debounce, aggregate, first page, and UI update. |
 
-Manual Android Studio System Trace captures against the same simulated fixture
+Manual Android Studio System Trace captures against the same simulated fixture **100,000-row**
 showed no significant dropped frames while filtering, searching, or scrolling.
 
 | Filtering latency | Search | Scroll |
@@ -132,9 +131,6 @@ git config core.hooksPath .githooks
 | Android Lint | `./gradlew lintDebug` |
 | Instrumented tests | `./gradlew :app:connectedDebugAndroidTest` |
 | Benchmark fixture contract | `./gradlew :feature:logs:data:testBenchmarkUnitTest` |
-
-The [performance runbook](documentation/performanceBenchmark.md) documents the
-optional device-only benchmark commands and required test conditions.
 
 ## Scope
 
