@@ -58,19 +58,19 @@ checks; it never formats, modifies, or stages files.
 | --- | --- |
 | Assemble the debug app | `./gradlew :app:assembleDebug` |
 | Run JVM unit tests | `./gradlew testDebugUnitTest` |
-| Verify log viewer screen Paparazzi goldens | `./gradlew :feature:logs:verifyPaparazziDebug` |
-| Re-record log viewer screen goldens after an intended visual change | `./gradlew :feature:logs:recordPaparazziDebug` |
+| Verify log viewer screen Paparazzi goldens | `./gradlew :feature:logs:presentation:verifyPaparazziDebug` |
+| Re-record log viewer screen goldens after an intended visual change | `./gradlew :feature:logs:presentation:recordPaparazziDebug` |
 | Check Kotlin/Gradle formatting | `./gradlew ktlintCheck` |
 | Apply Kotlin/Gradle formatting | `./gradlew ktlintFormat` |
 | Run Android Lint | `./gradlew lintDebug` |
 | Compile instrumented test sources | `./gradlew :app:compileDebugAndroidTestSources` |
-| Compile log viewer interaction test sources | `./gradlew :feature:logs:compileDebugAndroidTestSources` |
+| Compile log viewer interaction test sources | `./gradlew :feature:logs:presentation:compileDebugAndroidTestSources` |
 | Install the debug app on a device/emulator | `./gradlew :app:installDebug` |
 | Run instrumented tests on a device/emulator | `./gradlew :app:connectedDebugAndroidTest` |
-| Run log viewer interaction tests on a device/emulator | `./gradlew :feature:logs:connectedDebugAndroidTest` |
+| Run log viewer interaction tests on a device/emulator | `./gradlew :feature:logs:presentation:connectedDebugAndroidTest` |
 | Run design-system component tests on a device/emulator | `./gradlew :core:designsystem:connectedDebugAndroidTest` |
 | Assemble the release-like Macrobenchmark target | `./gradlew :app:assembleBenchmark` |
-| Run benchmark-variant unit tests (100k fixture contract) | `./gradlew :feature:logs:testBenchmarkUnitTest` |
+| Run benchmark-variant unit tests (100k fixture contract) | `./gradlew :feature:logs:data:testBenchmarkUnitTest` |
 
 ### Optional performance benchmarks
 
@@ -103,18 +103,20 @@ Compare only runs from the same device under matching recorded system state.
 ## Module graph
 
 ```
-:app -> :feature:logs
+:app -> :feature:logs:presentation
 :app -> :core:designsystem
-:feature:logs -> :core:network
-:feature:logs -> :core:designsystem
+:feature:logs:presentation -> :feature:logs:data
+:feature:logs:presentation -> :core:designsystem
+:feature:logs:data -> :core:network
 ```
 
 Core modules never depend on app or feature modules.
 
 | Module | Responsibility |
 | --- | --- |
-| `:app` | Composition root: Hilt application, single activity, themes and composes `:feature:logs`. |
-| `:feature:logs` | Public `LogsFeature()` entry point, and the feature-owned Room database, repository, query builder, and presentation. |
+| `:app` | Composition root: Hilt application, single activity, themes and composes `:feature:logs:presentation`. |
+| `:feature:logs:presentation` | Public `LogsFeature()` entry point, ViewModel/query coordination, display mapping, Compose UI, and feature visual/interaction tests. |
+| `:feature:logs:data` | Feature-owned Room database, remote API/DTOs, repository contract and implementation, query builder, and data/benchmark tests. |
 | `:core:network` | Retrofit/OkHttp/Kotlinx Serialization networking infrastructure. |
 | `:core:designsystem` | Shared Compose Material 3 theme (`FGFChallengeTheme`) and design-system building blocks. |
 | `:benchmark` | Optional out-of-process Macrobenchmark test APK. It measures `:app`'s benchmark variant and is never part of a shipping build. |

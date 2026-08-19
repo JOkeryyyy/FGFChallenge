@@ -47,7 +47,7 @@ android {
 }
 
 dependencies {
-    implementation(projects.feature.logs)
+    implementation(projects.feature.logs.presentation)
     implementation(projects.core.designsystem)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.runtime.tracing)

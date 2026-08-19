@@ -66,16 +66,19 @@ The architecture preserves these invariants:
 
 ## Gradle modules
 
-The existing four-module graph remains sufficient:
+The five normal production modules remain sufficient:
 
 ```text
 :app
-    -> :feature:logs
+    -> :feature:logs:presentation
     -> :core:designsystem
 
-:feature:logs
-    -> :core:network
+:feature:logs:presentation
+    -> :feature:logs:data
     -> :core:designsystem
+
+:feature:logs:data
+    -> :core:network
 
 :core:network
     -> no app or feature module
@@ -86,13 +89,14 @@ The existing four-module graph remains sufficient:
 
 ```mermaid
 flowchart TD
-    APP[":app"] --> FEATURE[":feature:logs"]
+    APP[":app"] --> PRESENTATION[":feature:logs:presentation"]
     APP --> DESIGN[":core:designsystem"]
-    FEATURE --> NETWORK[":core:network"]
-    FEATURE --> DESIGN
+    PRESENTATION --> DATA[":feature:logs:data"]
+    PRESENTATION --> DESIGN
+    DATA --> NETWORK[":core:network"]
 ```
 
-Room and Paging are feature-specific dependencies in `:feature:logs`. A generic `:core:database` module is not created without a second consumer.
+Room and Paging are feature-specific dependencies in `:feature:logs:data`. A generic `:core:database` module is not created without a second consumer.
 
 ### `:app`
 
@@ -122,22 +126,13 @@ Owns fixed light/dark Material 3 themes, typography, shapes, spacing, and statel
 
 Design-system components accept display-ready values and callbacks. They do not import feature state, ViewModels, repository models, Room, DAO/entity types, or Paging types. Dynamic color remains excluded so severity colors and visual tests are deterministic.
 
-### `:feature:logs`
+### `:feature:logs:presentation`
 
-Contains data and presentation. It exposes only `LogsFeature` to `:app`.
+Contains the public `LogsFeature` entry point and presentation. It depends only on the Logs data contract and the design system; it has no Room, DTO, DAO, Retrofit, or OkHttp dependency.
 
 ```text
-feature/logs/
+feature/logs/presentation/
     LogsFeature.kt
-
-    data/
-        remote/         LogsApi and serializable snapshot DTOs
-        local/          Room database, DAO, entities, and query builder
-        model/          Immutable repository-facing entries, query, summary, and options
-        mapper/         Remote/entity boundary mapping
-        repository/     LogsRepository and SnapshotLogsRepository
-        error/          Feature-local Result and LogsDataError
-        di/             LogsDataModule
 
     presentation/
         model/          Display-ready rows, filter models, summary, and list items
@@ -145,6 +140,21 @@ feature/logs/
         LogViewerUiState
         LogViewerViewModel
         LogViewerScreen
+```
+
+### `:feature:logs:data`
+
+Contains feature-owned data access. It exposes the immutable repository contract and application models consumed by presentation; remote DTOs, Room, query implementation, and infrastructure failures remain internal.
+
+```text
+feature/logs/data/
+    remote/             LogsApi and serializable snapshot DTOs
+    local/              Room database, DAO, entities, and query builder
+    model/              Immutable repository-facing entries, query, summary, and options
+    mapper/             Remote/entity boundary mapping
+    repository/         LogsRepository and SnapshotLogsRepository
+    error/              Feature-local Result and LogsDataError
+    di/                 LogsDataModule
 ```
 
 Exact filenames are selected in the implementation plans. The ownership and dependency direction above are fixed.
@@ -162,7 +172,7 @@ Presentation owns:
 - mapping repository/application entries into display-ready paged list items;
 - assembling Compose UI and rendering Paging load states.
 
-Presentation derives an immutable `LogQuery` and calls repository operations for query-driven rows, summaries, refresh, options, and details. It never imports or calls `SnapshotLogsRepository`, `LogsApi`, DTOs, Room database/DAO/entity/query-builder types, Retrofit, OkHttp, or SQLite.
+Presentation in `:feature:logs:presentation` derives an immutable `LogQuery` and calls repository operations for query-driven rows, summaries, refresh, options, and details. It never imports or calls `SnapshotLogsRepository`, `LogsApi`, DTOs, Room database/DAO/entity/query-builder types, Retrofit, OkHttp, or SQLite.
 
 ### Query coordination
 
@@ -173,11 +183,11 @@ The ViewModel keeps query coordination intentionally small:
 - coordination of the repository's paged and aggregate streams from that same value;
 - replacement or cancellation of obsolete collections when the active query changes.
 
-No new domain package, use-case layer, or pass-through action wrapper is required. `LogQuery` is an immutable repository input in `data/model` because `LogsRepository` owns the data contract; presentation owns only its simple derivation from screen state.
+No new domain package, use-case layer, or pass-through action wrapper is required. `LogQuery` is an immutable repository input in `:feature:logs:data` because `LogsRepository` owns the data contract; presentation owns only its simple derivation from screen state.
 
 ### Data
 
-Data owns all external and persisted access:
+`:feature:logs:data` owns all external and persisted access:
 
 - `LogsApi` and remote DTOs;
 - Room database, entity, DAO, migrations, indexes, and parameterized query construction;
@@ -399,7 +409,7 @@ Coroutine cancellation is always rethrown before broad exception mapping. Neithe
 
 Paging refresh/append errors use generic load-state UI and Paging retry without exposing or branching on an infrastructure exception. An append failure retains loaded rows. Startup refresh failure is separate and gates whether the snapshot is considered current.
 
-The typed `Result<T, E : Error>` and helpers remain feature-local. They are not network infrastructure and move to a shared module only if another feature genuinely reuses the convention.
+The `LogsDataError`-bounded typed `Result<T, E : LogsDataError>` and helpers remain feature-local. They are not network infrastructure and move to a shared module only if another feature genuinely reuses the convention.
 
 ## Unidirectional presentation state
 
@@ -439,7 +449,7 @@ All user input is modelled as `LogViewerAction`, including:
 
 Selection is durable state, not a one-time event. Details are resolved by stable ID rather than scanning loaded pages. No event channel is required because this one-screen app has no navigation or transient action that cannot be represented as state.
 
-The feature root obtains the Hilt ViewModel and collects state with lifecycle awareness. The screen composable receives immutable state, paged items/load state, and action callbacks, so it remains previewable and directly testable.
+The `:feature:logs:presentation` feature root obtains the Hilt ViewModel and collects state with lifecycle awareness. The screen composable receives immutable state, paged items/load state, and action callbacks, so it remains previewable and directly testable.
 
 ## Paging-aware UI architecture
 
@@ -482,7 +492,7 @@ Hilt remains the DI framework.
 
 - `:app` provides the application/activity entry points.
 - `:core:network` provides shared network construction.
-- `:feature:logs` provides the API, Room database/DAO, `SnapshotLogsRepository`, and any explicitly required dispatchers.
+- `:feature:logs:data` provides the API, feature-owned Room database/DAO, `SnapshotLogsRepository`, and any explicitly required dispatchers.
 - Data-layer bindings stay in `LogsDataModule`; split another module only for a genuinely different owner, component, or lifetime.
 - Constructor injection is preferred, and expensive dependencies are scoped only when their lifecycle requires it.
 
@@ -499,7 +509,7 @@ Only the snapshot-refresh strategy varies by build type. The read path is identi
 ```text
 debug/release launch -> RemoteSnapshotRefresher -> atomic Room replacement
 benchmark launch     -> BenchmarkSnapshotRefresher -> ensure deterministic 100k Room fixture
-all variants read    -> SnapshotLogsRepository -> Room/Paging/query/summary/details
+all variants read    -> :feature:logs:data SnapshotLogsRepository -> Room/Paging/query/summary/details
 ```
 
 `SnapshotRefresher` is a variant seam, justified by two real refresh implementations selected per source set. It is not a domain layer, not a use case, and not a production data source: nothing outside `data/repository` consumes it, and it adds no indirection to any read. Room remains the post-refresh source of truth for every variant, and the benchmark refresher is idempotent so `CompilationMode.Ignore()` can preserve the seeded snapshot across iterations without reinstalling or clearing app data.
@@ -537,7 +547,7 @@ The hook checks only and does not format, modify, stage, or commit files. Setup 
 - Kotlinx Serialization is used for JSON.
 - Hilt uses KSP rather than kapt.
 - Dependency versions are pinned in `libs.versions.toml`; dynamic versions are prohibited.
-- Shared root Gradle configuration remains preferable to a build-logic module for this four-module project.
+- Shared root Gradle configuration remains preferable to a build-logic module for this five-module production graph.
 
 Room and Paging versions are selected and verified with the existing compatible toolchain in the Step 7 implementation plan.
 
