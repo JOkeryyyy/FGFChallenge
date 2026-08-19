@@ -24,11 +24,11 @@ The Macrobenchmark suite was recorded on the documented physical One
 UI 2.5 baseline device (Galaxy S9+ / API 29) using the **100,000-row** benchmark
 fixture and ten measured iterations per scenario.
 
-| Scenario | Observation                                                                                                 |
-| --- |-------------------------------------------------------------------------------------------------------------|
-| Combined filter | **12.55 ms** for tag, severity, and AI-generated predicates, including aggregate, first page, and redraw.   |
-| Scroll | **6.59 ms frame time**; **1.9%** of frames (7/370) exceeded the 16.7 ms / 60 Hz budget.                     |
-| Literal search | **8.65ms** for `timed out` across 20,020 matches, including debounce, aggregate, first page, and UI update. |
+| Scenario | Frame time Observation                                                                                       |
+| --- |--------------------------------------------------------------------------------------------------------------|
+| Combined filter | **12.55ms** for tag, severity, and AI-generated predicates, including aggregate, first page, and redraw.     |
+| Scroll | **6.59 ms**; **1.9%** of frames (7/370) exceeded the 16.7 ms / 60 Hz budget.                                 |
+| Literal search | **8.64 ms** for `timed out` across 20,020 matches, including debounce, aggregate, first page, and UI update. |
 
 Manual Android Studio System Trace captures against the same simulated fixture **100,000-row**
 showed no significant dropped frames while filtering, searching, or scrolling.
