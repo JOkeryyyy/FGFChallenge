@@ -159,8 +159,15 @@ private fun LazyListScope.pagedLogItems(
         when (val item = logs[index]) {
             is LogViewerListItem.MinuteHeader -> {
                 // No entry count: a paged list holds part of the result, so the size of the minute
-                // is unknown until the whole group happens to be loaded.
-                LogMinuteHeader(minute = item.minute)
+                // is unknown until the whole group happens to be loaded. The collapsed flag arrives
+                // on the item rather than as a parameter of this function, which is what keeps the
+                // content lambda's captures — and therefore the composed rows — untouched by a
+                // toggle. `onAction` is already one of them.
+                LogMinuteHeader(
+                    minute = item.minute,
+                    isCollapsed = item.isCollapsed,
+                    onToggle = { onAction(LogViewerAction.MinuteGroupToggled(item.utcMinuteId)) },
+                )
             }
 
             is LogViewerListItem.LogRow -> {

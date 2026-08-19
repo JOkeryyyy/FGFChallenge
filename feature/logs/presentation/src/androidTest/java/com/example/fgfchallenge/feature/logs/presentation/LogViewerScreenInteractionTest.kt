@@ -253,6 +253,51 @@ class LogViewerScreenInteractionTest {
         composeTestRule.onNodeWithText("11 of 5,000 Logs").assertIsDisplayed()
     }
 
+    @Test
+    fun minuteHeaderTapReportsThatMinute() {
+        setScreen(LogViewerFixture.AllLogs)
+
+        composeTestRule.onNodeWithText("17:11").performClick()
+
+        // The full minute ID, not the displayed `HH:mm`: two days of the snapshot share a clock
+        // minute, and the label is only the tail of the group's identity.
+        assertThat(actions).containsExactly(LogViewerAction.MinuteGroupToggled("2025-05-22T17:11Z"))
+    }
+
+    @Test
+    fun aCollapsedMinuteKeepsItsHeaderAndDropsOnlyItsOwnRows() {
+        setScreen(LogViewerFixture.CollapsedGroup)
+
+        // The heading survives — it is the control that expands the group again — while its rows
+        // are gone and the next group's are untouched.
+        composeTestRule.onNodeWithText("17:11").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Connection timed out").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Auth service unreachable").assertDoesNotExist()
+        composeTestRule.onNodeWithText("17:10").assertIsDisplayed()
+        composeTestRule.onNodeWithText("DNS resolution failed").assertIsDisplayed()
+    }
+
+    @Test
+    fun aCollapsedMinutesHeaderStillReportsTaps() {
+        setScreen(LogViewerFixture.CollapsedGroup)
+
+        composeTestRule.onNodeWithText("17:11").performClick()
+
+        assertThat(actions).containsExactly(LogViewerAction.MinuteGroupToggled("2025-05-22T17:11Z"))
+    }
+
+    /**
+     * The loaded figure counts rows the list presents, so collapsing a group lowers it while the
+     * matching total — an aggregate over the complete filtered result — does not move. A collapsed
+     * group is still a match; it is just not being shown.
+     */
+    @Test
+    fun collapsingAGroupLowersTheLoadedCountAndNotTheMatchingTotal() {
+        setScreen(LogViewerFixture.CollapsedGroup)
+
+        composeTestRule.onNodeWithText("6 of 5,000 Logs").assertIsDisplayed()
+    }
+
     private fun setScreenWithSelectedLog() {
         setScreen(
             LogViewerFixture.AllLogs,

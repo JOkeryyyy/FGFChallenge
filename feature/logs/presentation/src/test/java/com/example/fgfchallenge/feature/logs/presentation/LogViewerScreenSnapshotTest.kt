@@ -13,9 +13,9 @@ import org.junit.Test
  * in the populated and filtered states, the compact app bar titled with the loaded and matching
  * counts together, the filter action carrying its active-filter badge once a structured filter
  * applies, the search field expanded under the bar when it is asked for, a zero-valued indicator
- * and a `0 of 0 Logs` title when a search matches nothing, and a modal error
- * carrying Retry — and, once that modal is dismissed, a notice that keeps the failure visible and
- * retryable over the rows it left behind.
+ * and a `0 of 0 Logs` title when a search matches nothing, a collapsed minute group showing its
+ * heading with its rows withheld, and a modal error carrying Retry — and, once that modal is
+ * dismissed, a notice that keeps the failure visible and retryable over the rows it left behind.
  *
  * The Paging refresh failure is here rather than beside the append states because it renders at the
  * head of the list: the notice and the rows it must not replace are both above the fold at 640dp.
@@ -48,6 +48,17 @@ class LogViewerScreenSnapshotTest {
 
     @Test
     fun populatedContentDark() = paparazzi.snapshotLogViewerScreen(LogViewerFixture.AllLogs, darkTheme = true)
+
+    /**
+     * The collapsed group's heading is the state's only visible trace: its rows are gone, the
+     * headings around it are unchanged, and the app bar's matching total still counts the rows the
+     * group withheld.
+     */
+    @Test
+    fun collapsedGroupLight() = paparazzi.snapshotLogViewerScreen(LogViewerFixture.CollapsedGroup, darkTheme = false)
+
+    @Test
+    fun collapsedGroupDark() = paparazzi.snapshotLogViewerScreen(LogViewerFixture.CollapsedGroup, darkTheme = true)
 
     @Test
     fun filteredContentLight() = paparazzi.snapshotLogViewerScreen(LogViewerFixture.Filtered, darkTheme = false)

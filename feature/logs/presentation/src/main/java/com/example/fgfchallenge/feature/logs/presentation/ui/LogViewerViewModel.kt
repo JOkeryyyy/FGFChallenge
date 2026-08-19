@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
+import androidx.paging.filter
 import androidx.paging.insertSeparators
 import androidx.paging.map
 import com.example.fgfchallenge.feature.logs.data.error.Result
@@ -13,10 +14,12 @@ import com.example.fgfchallenge.feature.logs.data.model.aggregateCriteria
 import com.example.fgfchallenge.feature.logs.data.repository.LogsRepository
 import com.example.fgfchallenge.feature.logs.presentation.activeLogQuery
 import com.example.fgfchallenge.feature.logs.presentation.model.LogViewerListItem
+import com.example.fgfchallenge.feature.logs.presentation.model.isHiddenBy
 import com.example.fgfchallenge.feature.logs.presentation.model.minuteHeaderBetween
 import com.example.fgfchallenge.feature.logs.presentation.model.toListItem
 import com.example.fgfchallenge.feature.logs.presentation.model.toLogDetailsUi
 import com.example.fgfchallenge.feature.logs.presentation.model.toSeveritySummaryUi
+import com.example.fgfchallenge.feature.logs.presentation.model.withCollapsedState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -67,6 +70,21 @@ internal class LogViewerViewModel
         private val _state = MutableStateFlow(LogViewerUiState())
 
         val state: StateFlow<LogViewerUiState> = _state.asStateFlow()
+
+        /**
+         * The UTC minutes the user has collapsed, held outside [LogViewerUiState] on purpose.
+         *
+         * Only the row stream reads it, and it changes on a tap. Publishing it as screen state would
+         * republish [LogViewerUiState] — and so recompose the screen, its app bar, and its summary
+         * card — for a value none of them render, which is the same reason the filter sheet's draft
+         * lives in `LogFilterSheetHost` rather than here.
+         *
+         * It is a set of minute IDs rather than of headers, and is never reset: a minute ID is an
+         * absolute instant, so a group that leaves the result under a narrower filter and comes back
+         * later is the same group the user collapsed. Its size is bounded by how many groups the
+         * user has actually tapped.
+         */
+        private val collapsedMinutes = MutableStateFlow<Set<String>>(emptySet())
 
         /**
          * The search text the database is allowed to see: the typed text, settled.
@@ -126,16 +144,28 @@ internal class LogViewerViewModel
             activeQuery.map(LogQuery::aggregateCriteria).distinctUntilChanged()
 
         /**
-         * The list, as display-ready items grouped under UTC minute headers.
+         * The list, as display-ready items grouped under UTC minute headers, with the collapsed
+         * groups' rows withheld.
          *
          * `flatMapLatest` is the latest-generation mechanism: a new query cancels the previous
          * Pager's collection, so rows from an obsolete query can never arrive after the criteria
          * change.
          *
-         * Both transformations run *before* `cachedIn`, which is what keeps them off the recomposing
-         * thread and stops them from re-running for every collector: a row is formatted once, when
-         * its page loads. `cachedIn` also keeps the loaded pages across configuration changes and
-         * makes the stream shareable, which a `PagingData` flow otherwise is not.
+         * Mapping and separator insertion run *before* `cachedIn`, which is what keeps them off the
+         * recomposing thread and stops them from re-running for every collector: a row is formatted
+         * once, when its page loads. `cachedIn` also keeps the loaded pages across configuration
+         * changes and makes the stream shareable, which a `PagingData` flow otherwise is not.
+         *
+         * Collapse is applied *after* `cachedIn`, and that side of the line is equally deliberate.
+         * It is UI state rather than criteria, so a toggle must reuse the pages already loaded
+         * instead of restarting the Pager; combining it upstream would bake one collapse set into
+         * the cached generation and re-query Room on every tap. It also stays out of the query
+         * itself: excluding the rows in SQL would leave a collapsed minute with no rows, and the
+         * separator transformation would then emit no header for it — collapsing a group would make
+         * it disappear with no way to expand it again.
+         *
+         * Headers are flagged rather than replaced so their key and content type are unchanged, and
+         * the common case — nothing collapsed — short-circuits to the cached value untouched.
          */
         @OptIn(ExperimentalCoroutinesApi::class)
         val pagedLogs: Flow<PagingData<LogViewerListItem>> =
@@ -146,6 +176,17 @@ internal class LogViewerViewModel
                         .map(LogEntry::toListItem)
                         .insertSeparators(generator = ::minuteHeaderBetween)
                 }.cachedIn(viewModelScope)
+                .combine(collapsedMinutes) { pagingData, collapsed ->
+                    if (collapsed.isEmpty()) {
+                        pagingData
+                    } else {
+                        // Filter first so the flag pass runs over what survives rather than over
+                        // every loaded row.
+                        pagingData
+                            .filter { item -> !item.isHiddenBy(collapsed) }
+                            .map { item -> item.withCollapsedState(collapsed) }
+                    }
+                }
 
         /** Cancelled and replaced by a retry, so two refreshes can never resolve out of order. */
         private var refreshJob: Job? = null
@@ -217,6 +258,21 @@ internal class LogViewerViewModel
                 // drops as a duplicate, so nothing restarts.
                 is LogViewerAction.FiltersApplied -> {
                     updateQueryInputs { it.copy(filters = action.selection, isFilterSheetOpen = false) }
+                }
+
+                // Neither criteria nor screen state: it changes which of the already-loaded rows
+                // the list presents, so it is written straight to `collapsedMinutes` and reaches
+                // nothing else. The Pager keeps its pages, the summary keeps describing the whole
+                // filtered result — a collapsed group is still a match — and `LogViewerUiState` does
+                // not change at all.
+                is LogViewerAction.MinuteGroupToggled -> {
+                    collapsedMinutes.update { collapsed ->
+                        if (action.utcMinuteId in collapsed) {
+                            collapsed - action.utcMinuteId
+                        } else {
+                            collapsed + action.utcMinuteId
+                        }
+                    }
                 }
 
                 // Retry re-runs the launch refresh, and only that. The query, filters, and sort are

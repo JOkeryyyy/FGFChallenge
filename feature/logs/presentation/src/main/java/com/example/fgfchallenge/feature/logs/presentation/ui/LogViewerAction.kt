@@ -54,6 +54,18 @@ internal sealed interface LogViewerAction {
         val selection: LogFilterSelection,
     ) : LogViewerAction
 
+    /**
+     * A UTC minute header was tapped, which collapses that group if it is expanded and expands it
+     * if it is collapsed.
+     *
+     * It reports the minute rather than the intended direction because the ViewModel owns which
+     * minutes are currently collapsed; a header that says "collapse me" would be stating a
+     * conclusion drawn from state it does not hold.
+     */
+    data class MinuteGroupToggled(
+        val utcMinuteId: String,
+    ) : LogViewerAction
+
     /** Retry on the error dialog. */
     data object RetryClicked : LogViewerAction
 

@@ -23,15 +23,23 @@ internal sealed interface LogViewerListItem {
     val utcMinuteId: String
 
     /**
-     * Static UTC-minute group heading.
+     * UTC-minute group heading.
      *
      * [minute] is the `HH:mm` the header displays, sliced out of [utcMinuteId] rather than
      * formatted from the timestamp a second time — the label and the list key are then the same
      * value by construction, and cannot drift if one formatter is ever changed.
+     *
+     * [isCollapsed] deliberately affects neither [stableKey] nor [contentType]. Collapsing a group
+     * is a change to one header's appearance, not a change of identity: keeping both derived from
+     * [utcMinuteId] alone is what lets the lazy list reuse the header's composition across a toggle
+     * instead of discarding and rebuilding it. It defaults to expanded because the separator
+     * transformation that creates headers knows nothing about collapse — the flag is applied
+     * further down the stream, where the collapsed set is known.
      */
     @Immutable
     data class MinuteHeader(
         override val utcMinuteId: String,
+        val isCollapsed: Boolean = false,
     ) : LogViewerListItem {
         val minute: String = utcMinuteId.substringAfter(DATE_TIME_SEPARATOR).removeSuffix(UTC_SUFFIX)
         override val stableKey: String = minuteHeaderKey(utcMinuteId)
@@ -69,3 +77,25 @@ internal sealed interface LogViewerListItem {
 internal fun minuteHeaderKey(utcMinuteId: String): String = "minute:$utcMinuteId"
 
 internal fun logRowKey(logId: String): String = "log:$logId"
+
+/**
+ * Whether [collapsedMinutes] withholds this item from the list.
+ *
+ * Only rows are withheld. A collapsed group still shows its heading — that heading is the control
+ * the user expands it again with, so hiding it would make the group unreachable.
+ */
+internal fun LogViewerListItem.isHiddenBy(collapsedMinutes: Set<String>): Boolean =
+    this is LogViewerListItem.LogRow && utcMinuteId in collapsedMinutes
+
+/**
+ * This item with its collapsed state applied, which only ever changes a [LogViewerListItem.MinuteHeader].
+ *
+ * Paired with [isHiddenBy] rather than folded into it because the two run over different sets: the
+ * rows are filtered out first, and this flags what is left.
+ */
+internal fun LogViewerListItem.withCollapsedState(collapsedMinutes: Set<String>): LogViewerListItem =
+    when {
+        this !is LogViewerListItem.MinuteHeader -> this
+        utcMinuteId !in collapsedMinutes -> this
+        else -> copy(isCollapsed = true)
+    }

@@ -157,6 +157,8 @@ fun LogComponentsShowcase(modifier: Modifier = Modifier) {
                 Column {
                     LogMinuteHeader(minute = "17:11", itemCount = 12)
                     LogMinuteHeader(minute = "17:10", itemCount = 8)
+                    LogMinuteHeader(minute = "17:09", isCollapsed = false, onToggle = {})
+                    LogMinuteHeader(minute = "17:08", isCollapsed = true, onToggle = {})
                 }
             }
 
