@@ -324,3 +324,8 @@ Code quality: use ktlint on every commit
 - Tool: Codex
 - Task: Perform final acceptance verification for the Logs module split. The exact acceptance command exited `1` only for the documented `SnapshotLogsRepositoryQueryTest` long-scroll baseline; a forced presentation rerun then passed 150/150 tests, including all 17 Paparazzi cases.
 - Key prompt: Run `./gradlew ktlintCheck lintDebug testDebugUnitTest :feature:logs:data:testBenchmarkUnitTest :feature:logs:presentation:verifyPaparazziDebug :app:assembleDebug :app:assembleBenchmark :app:compileDebugAndroidTestSources :feature:logs:presentation:compileDebugAndroidTestSources`, separate documented baseline failures from new split regressions, and make no product, query, assertion, or screenshot change unless a new integration failure requires it.
+
+- Date: 2026-08-18
+- Tool: Codex
+- Task: Correct the final Logs split public typed-result contract and stale ownership documentation after final review.
+- Key prompt: Bind `Result`, `EmptyResult`, and helpers directly to `LogsDataError`; remove the extra public `Error` marker; add a regression assertion for the exact generic bound; align architecture, data-convention, module-graph, and database KDocs; preserve behavior and repository signatures.

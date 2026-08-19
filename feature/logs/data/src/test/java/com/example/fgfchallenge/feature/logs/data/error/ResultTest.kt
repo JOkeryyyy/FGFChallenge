@@ -11,6 +11,14 @@ class ResultTest {
     private val failure: Result<Int, LogsDataError> = Result.Error(LogsDataError)
 
     @Test
+    fun `error type is bounded directly to LogsDataError`() {
+        val errorTypeParameter = Result::class.java.typeParameters.single { it.name == "E" }
+
+        assertThat(errorTypeParameter.bounds.toList())
+            .isEqualTo(listOf(LogsDataError::class.java))
+    }
+
+    @Test
     fun `map transforms success data`() {
         assertThat(success.map { it * 3 }).isEqualTo(Result.Success(6))
     }

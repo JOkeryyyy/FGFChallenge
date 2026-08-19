@@ -35,7 +35,8 @@ project specifically:
   contract into another layer.
 - Hilt is the project's DI framework (see §12); the framework-agnostic examples below
   apply equally to Hilt constructor injection.
-- Use this project's existing typed `Result<T, E : Error>` / `EmptyResult` wrapper and
+- Use this project's existing `LogsDataError`-bounded `Result<T, E : LogsDataError>` /
+  `EmptyResult` wrapper and
   its `map`/`onSuccess`/`onFailure` helpers rather than redefining a parallel `Result`
   type — see §11. It lives in `:feature:logs:data`, not `:core:network`.
 - The feature's repository failure is a single `LogsDataError` value, not the multi-case
@@ -524,10 +525,11 @@ Result<T, DataError>
 ```
 
 This is a project convention rather than a requirement of Android Architecture Guidance.
-In this project, reuse the existing `Result<T, E : Error>` / `EmptyResult` wrapper and its
-`map`/`onSuccess`/`onFailure` helpers instead of introducing a second, parallel `Result`
-type — one typed-result convention per codebase avoids ambiguity between it and
-`kotlin.Result` from the standard library.
+In this project, reuse the existing `LogsDataError`-bounded
+`Result<T, E : LogsDataError>` / `EmptyResult` wrapper and its
+`map`/`onSuccess`/`onFailure` helpers instead of introducing a second, parallel
+`Result` type — one typed-result convention per codebase avoids ambiguity between
+it and `kotlin.Result` from the standard library.
 
 The wrapper stays in `:feature:logs:data`. It is a result convention, not network
 infrastructure, so it does not belong in `:core:network`; promote it to a neutral shared

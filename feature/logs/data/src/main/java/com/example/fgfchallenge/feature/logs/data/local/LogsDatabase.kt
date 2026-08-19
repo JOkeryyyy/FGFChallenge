@@ -6,7 +6,7 @@ import androidx.room.RoomDatabase
 /**
  * The feature-owned store for the current log snapshot.
  *
- * It lives in `:feature:logs` rather than a shared `:core:database` module because no other
+ * It lives in `:feature:logs:data` rather than a shared `:core:database` module because no other
  * feature reads logs; a generic module would be an abstraction with one consumer.
  *
  * Schema export and migrations are deliberately absent. Every launch replaces the whole snapshot

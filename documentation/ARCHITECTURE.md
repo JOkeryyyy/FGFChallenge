@@ -409,7 +409,7 @@ Coroutine cancellation is always rethrown before broad exception mapping. Neithe
 
 Paging refresh/append errors use generic load-state UI and Paging retry without exposing or branching on an infrastructure exception. An append failure retains loaded rows. Startup refresh failure is separate and gates whether the snapshot is considered current.
 
-The typed `Result<T, E : Error>` and helpers remain feature-local. They are not network infrastructure and move to a shared module only if another feature genuinely reuses the convention.
+The `LogsDataError`-bounded typed `Result<T, E : LogsDataError>` and helpers remain feature-local. They are not network infrastructure and move to a shared module only if another feature genuinely reuses the convention.
 
 ## Unidirectional presentation state
 
