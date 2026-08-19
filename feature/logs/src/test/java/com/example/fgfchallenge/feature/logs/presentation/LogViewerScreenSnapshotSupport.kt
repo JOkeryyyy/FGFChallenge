@@ -1,9 +1,15 @@
 package com.example.fgfchallenge.feature.logs.presentation
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalInspectionMode
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import com.android.resources.Density
 import com.example.fgfchallenge.core.designsystem.theme.FGFChallengeTheme
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerFixture
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerScreen
+import com.example.fgfchallenge.feature.logs.presentation.ui.logViewerFixtureItems
+import com.example.fgfchallenge.feature.logs.presentation.ui.logViewerFixtureState
 
 /*
  * Shared device configurations and the single render entry point used by the log viewer's Paparazzi
@@ -53,18 +59,26 @@ internal val wideDeviceConfig: DeviceConfig =
  * `ModalBottomSheet` hosts its content in a separate window that Paparazzi's single-window render
  * never captures. What the goldens do pin from the filter work is its entry point: the Filter
  * control and its active-filter badge render in the screen's own window.
+ *
+ * The render declares itself an inspection, which a golden is. It matters for exactly one state:
+ * the expanded search field takes focus as it appears, and focusing a field opens a text-input
+ * session whose IME `HandlerThread` layoutlib cannot run on the host JVM. So these goldens pin where
+ * the field sits and what it shows, and `LogViewerScreenInteractionTest` — which drives a real
+ * window — pins that it arrives focused. Nothing else on this screen reads inspection mode.
  */
 internal fun Paparazzi.snapshotLogViewerScreen(
     fixture: LogViewerFixture,
     darkTheme: Boolean,
 ) {
     snapshot {
-        FGFChallengeTheme(darkTheme = darkTheme) {
-            LogViewerScreen(
-                state = logViewerFixtureState(fixture),
-                logs = logViewerFixtureItems(fixture),
-                onAction = {},
-            )
+        CompositionLocalProvider(LocalInspectionMode provides true) {
+            FGFChallengeTheme(darkTheme = darkTheme) {
+                LogViewerScreen(
+                    state = logViewerFixtureState(fixture),
+                    logs = logViewerFixtureItems(fixture),
+                    onAction = {},
+                )
+            }
         }
     }
 }

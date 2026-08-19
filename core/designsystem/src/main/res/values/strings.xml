@@ -1,6 +1,6 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- LogSearchField -->
-    <string name="log_search_field_placeholder">Search message, tag, severity</string>
+    <string name="log_search_field_placeholder">Search message or log ID</string>
     <string name="log_search_field_clear_action">Clear search</string>
 
     <!-- SeverityIndicator -->

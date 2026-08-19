@@ -1,3 +1,5 @@
+import com.android.build.api.variant.HostTestBuilder
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
@@ -18,6 +20,15 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Mirrors the app's Macrobenchmark target so this module's `benchmark` source set — the
+    // deterministic 100k fixture and its refresher — is selected instead of falling back to release.
+    buildTypes {
+        create("benchmark") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -28,6 +39,31 @@ android {
     }
 }
 
+// AGP 9 creates host tests only for the `testBuildType`, so the benchmark fixture's contract tests
+// would have no task to run in. They are unit tests of benchmark-only source, so the variant that
+// owns that source is the one that must be able to test it.
+androidComponents {
+    beforeVariants(selector().withBuildType("benchmark")) { variantBuilder ->
+        variantBuilder.hostTests[HostTestBuilder.UNIT_TEST_TYPE]?.enable = true
+    }
+}
+
+// That variant's test task would otherwise also run the shared `src/test` suite a second time,
+// including the Paparazzi goldens — which are recorded against, and verified for, the debug variant
+// only. This task exists for `src/testBenchmark`, so it runs exactly that: every benchmark-variant
+// test class is named `*BenchmarkTest`/`Benchmark*Test`, and `failOnNoMatchingTests` makes a rename
+// that escapes the pattern fail loudly instead of silently running nothing.
+// `configureEach` rather than `named`: AGP registers the variant's test task after this script is
+// evaluated, so looking it up by name here would not find it.
+tasks.withType<Test>().configureEach {
+    if (name == "testBenchmarkUnitTest") {
+        filter {
+            includeTestsMatching("*Benchmark*Test")
+            isFailOnNoMatchingTests = true
+        }
+    }
+}
+
 dependencies {
     implementation(projects.core.network)
     implementation(projects.core.designsystem)
@@ -35,6 +71,7 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.core)
+    implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.lifecycle.runtime.compose)

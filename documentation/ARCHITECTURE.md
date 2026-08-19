@@ -364,10 +364,11 @@ Repository Pager configuration is:
 pageSize = 100
 initialLoadSize = 100
 prefetchDistance = 25
+maxSize = PagingConfig.MAX_SIZE_UNBOUNDED
 enablePlaceholders = false
 ```
 
-The initial page therefore contains the newest 100 matches, or all matches when fewer exist. The next page is requested before the final 25 loaded rows are exhausted. Room supplies a `PagingSource`; snapshot replacement and query replacement invalidate obsolete sources.
+The initial page therefore contains the newest 100 matches, or all matches when fewer exist. The next page is requested before the final 25 loaded rows are exhausted. `maxSize` is left unbounded: a cap makes Paging drop offscreen pages and re-query them from Room when the user scrolls back, and the snapshot is one bounded launch import rather than an open-ended remote feed, so the working set is bounded by the filtered result instead of by a configured maximum. The cost is that a full scroll of a large result retains every page it loaded; that is accepted for this prototype. Room supplies a `PagingSource`; snapshot replacement and query replacement invalidate obsolete sources.
 
 ### Aggregates and options
 
@@ -385,6 +386,8 @@ Filter options are unfiltered snapshot metadata: distinct tags and dataset laten
 ## Query generation and cancellation
 
 The ViewModel reflects typed search text immediately and derives one immutable `LogQuery` for the active inputs. A query change replaces the paged-row and aggregate-summary collections together; use a latest-generation mechanism when necessary to avoid showing results from an obsolete query.
+
+Typed text reaches that derivation only once it settles: the state — and so the field — updates on the keystroke, while the query waits out a short pause in typing, since every distinct query starts both a new Pager and a new full-result aggregate. Blank text commits at once, as do the deliberate commits (filter Apply, Clear All, sort), which are never made to wait on a pause. Cancellation of superseded work is unchanged and still required: a debounce reduces how many generations are started, not the rule that a started one may be replaced.
 
 The active generation passes the same query value to `pagedLogs(query)` and `summary(query)`. Presentation clears or marks the prior summary pending when criteria change so an old total is not labelled as belonging to new rows.
 
@@ -406,7 +409,7 @@ The typed `Result<T, E : Error>` and helpers remain feature-local. They are not 
 StateFlow<LogViewerUiState>
     immediate search text
     applied filters
-    filter draft and visibility
+    filter sheet visibility
     active-filter count
     sort direction
     startup refresh state
@@ -419,14 +422,17 @@ Flow<PagingData<LogViewerListItem>>
     display-ready log rows
 ```
 
-`LogViewerUiState` never contains `PagingData`, the complete database, every match, or a materialized copy of loaded rows. The separate Paging flow is the deliberate exception to “all screen values in one state object” because Paging owns and evicts its bounded working set.
+`LogViewerUiState` never contains `PagingData`, the complete database, every match, or a materialized copy of loaded rows. The separate Paging flow is the deliberate exception to “all screen values in one state object” because Paging owns its working set and the pages within it.
+
+The filter sheet's *uncommitted draft* is the second deliberate exception, and is owned by `LogFilterSheetHost` rather than by this state object. Holding it here published a new `LogViewerUiState` for every chip tap and every frame of a latency drag, which invalidated the screen, its `Scaffold`, and the row `LazyColumn` for a value none of them render — the draft is read only by the sheet, so it is hoisted only as far as the sheet. What remains in state is the sheet's visibility, because that is a screen-level decision.
+
+The host holds the *mapped* sheet model as its edit state, so one interaction rewrites one control instead of re-deriving every chip and reformatting every label; the expensive mapping runs when the sheet opens and once more on Apply. It keeps that edit in `rememberSaveable`, so it survives configuration change and process death. The host is composed as a sibling of `LogViewerScreen` under the feature root, not from inside the screen, which is what lets the screen skip while a filter session is in progress.
 
 All user input is modelled as `LogViewerAction`, including:
 
 - search text change and clear;
 - open/dismiss filter sheet;
-- edit filter draft;
-- Apply and Clear All;
+- Apply, carrying the sheet's finished selection;
 - sort change;
 - startup Retry and Paging retry;
 - row selection and details dismissal.
@@ -441,7 +447,8 @@ The UI follows the revised wireframe and remains responsive:
 
 - startup loading uses skeletons with no fabricated log values;
 - startup error offers explicit Retry;
-- content keeps the full-result summary, search, Filter with active count, and sort visible;
+- a pinned Material 3 small top app bar is titled with the loaded row count and the full-result total together, and carries the filter entry with its active-category badge, search, and the sort toggle; the search field expands beneath it on demand and keeps its text when collapsed;
+- content keeps the full-result summary visible above the list;
 - the filter modal edits tags, five known severities, AI Any/Yes/No, UTC date/time, and inclusive latency draft values, then applies them together;
 - one flat `LazyColumn` renders paging-aware stable keys and content types;
 - non-collapsible UTC minute headers are inserted across page boundaries;
@@ -454,7 +461,7 @@ Paging transformation maps `LogEntry` to `LogRowUi` and uses separator insertion
 
 The Canvas severity indicator has a neutral circular track plus ERROR and FATAL arcs. Its percentage and adjacent legend come from the complete-result aggregate. Text labels ensure color is not the only carrier of meaning.
 
-Use clear visible labels for controls and load-state actions. One representative screenshot test per screen is sufficient.
+Load-state actions carry visible labels. App bar controls are icons, so each carries a text label for assistive technology instead: the filter action states how many categories are active, the search action states whether a collapsed search is still narrowing the result, and the sort action states both the order in effect and the one a tap produces. One representative screenshot test per screen is sufficient.
 
 ## Time and display formatting
 
@@ -485,7 +492,19 @@ Import avoids additional full-size application/UI copies where bounded mapping o
 
 ## Optional performance test
 
-Keep the existing bounded Room/Paging design and avoid obvious main-thread work or full-result copies in `LogViewerUiState`. After the core flow works, a manual responsiveness check against the supplied fixture may be run if time permits. A deterministic 100,000-record fixture, device/emulator benchmark, query-plan analysis, tuning cycle, and timing evidence remain optional; neither running the test nor acting on its findings blocks acceptance.
+Keep the existing bounded Room/Paging design and avoid obvious main-thread work or full-result copies in `LogViewerUiState`. After the core flow works, an optional Macrobenchmark suite may measure the viewer on one documented One UI 2.5 physical device against a benchmark-only deterministic 100,000-row Room snapshot. Query-plan analysis, tuning cycles, and timing evidence remain optional; neither running the suite nor acting on its findings blocks acceptance.
+
+Only the snapshot-refresh strategy varies by build type. The read path is identical in every variant:
+
+```text
+debug/release launch -> RemoteSnapshotRefresher -> atomic Room replacement
+benchmark launch     -> BenchmarkSnapshotRefresher -> ensure deterministic 100k Room fixture
+all variants read    -> SnapshotLogsRepository -> Room/Paging/query/summary/details
+```
+
+`SnapshotRefresher` is a variant seam, justified by two real refresh implementations selected per source set. It is not a domain layer, not a use case, and not a production data source: nothing outside `data/repository` consumes it, and it adds no indirection to any read. Room remains the post-refresh source of truth for every variant, and the benchmark refresher is idempotent so `CompilationMode.Ignore()` can preserve the seeded snapshot across iterations without reinstalling or clearing app data.
+
+Measurement is observational. It records `frameDurationCpuMs` percentiles and one named interaction-latency trace section per scenario, compares only runs from the same device under matching recorded system state, and defines no threshold. It is not part of the commit-time quality gate and never gates CI, acceptance, or delivery. The protocol lives in [`performanceBenchmark.md`](performanceBenchmark.md).
 
 ## Verification strategy
 
@@ -494,7 +513,7 @@ Keep focused tests at the highest-value boundaries:
 1. Data/repository tests cover supported query behavior, a successful snapshot replacement, and a retryable refresh failure.
 2. ViewModel tests cover the principal loading/error/retry and selection paths.
 3. One representative Paparazzi screenshot test per screen demonstrates visual verification.
-4. An optional manual performance smoke test may record observations from the supplied fixture; it is not an acceptance gate.
+4. An optional Macrobenchmark suite may record physical-device observations against the benchmark-only 100,000-row fixture; it is not an acceptance gate and is not part of the commit-time quality gate.
 
 Existing instrumented tests remain in place, but no additional interaction or instrumented-test coverage is required. Fakes are preferred over mocking frameworks. CI continues its existing host-side checks without making optional performance work or a visual-state matrix delivery gates.
 

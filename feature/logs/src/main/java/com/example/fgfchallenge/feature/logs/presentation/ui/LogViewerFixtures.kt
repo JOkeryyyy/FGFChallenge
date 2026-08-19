@@ -1,4 +1,4 @@
-package com.example.fgfchallenge.feature.logs.presentation
+package com.example.fgfchallenge.feature.logs.presentation.ui
 
 import androidx.compose.runtime.Composable
 import androidx.paging.LoadState
@@ -11,6 +11,7 @@ import com.example.fgfchallenge.core.designsystem.model.SeverityBadgeTone
 import com.example.fgfchallenge.core.designsystem.model.SeverityLegendItem
 import com.example.fgfchallenge.feature.logs.data.model.LogEntry
 import com.example.fgfchallenge.feature.logs.data.model.Severity
+import com.example.fgfchallenge.feature.logs.presentation.model.LogFilterSelection
 import com.example.fgfchallenge.feature.logs.presentation.model.LogViewerListItem
 import com.example.fgfchallenge.feature.logs.presentation.model.SeveritySummaryUi
 import com.example.fgfchallenge.feature.logs.presentation.model.minuteHeaderBetween
@@ -32,16 +33,24 @@ import java.time.Instant
  * hand-written one. A golden therefore pins the real formatting: real UTC `ss.SSS` row times, real
  * minute headers, real severity tones. The severity summaries are real too — the all-logs counts
  * are the supplied dataset's distribution and the filtered counts are the wireframe's `network`
- * search — while the row lists are deliberately short representative samples, so a displayed total
- * of `5,000 matching` describes the dataset the screen shows in the app, not the number of rows
+ * tag filter — while the row lists are deliberately short representative samples, so an app bar
+ * reading `5,000 Logs` describes the dataset the screen shows in the app, not the number of rows
  * here.
  */
 internal object LogViewerFixtures {
     const val ALL_LOGS_RESULT_COUNT: Int = 5_000
     const val FILTERED_RESULT_COUNT: Int = 718
-    const val FILTERED_QUERY: String = "network"
 
-    /** No supplied message, tag, or severity contains this, so it stands in for a dead-end search. */
+    /**
+     * The tag the filtered sample is narrowed by.
+     *
+     * A structured filter rather than a search term: search matches `message` or `id` literally and
+     * nothing else, so a sample whose rows are selected by their tag has to be reached the way the
+     * product actually reaches it — otherwise the fixture would show a result the app cannot produce.
+     */
+    const val FILTERED_TAG: String = "network"
+
+    /** No supplied message or log ID contains this, so it stands in for a dead-end search. */
     const val NONMATCHING_QUERY: String = "kubernetes"
 
     /** The payload carries one session for the whole response, so every entry reports the same ID. */
@@ -63,7 +72,7 @@ internal object LogViewerFixtures {
                 ),
         )
 
-    /** The wireframe's `network` result: 206 ERROR + 102 FATAL of 718 entries, so 43%. */
+    /** The wireframe's `network`-tagged result: 206 ERROR + 102 FATAL of 718 entries, so 43%. */
     val filteredSummary: SeveritySummaryUi =
         SeveritySummaryUi(
             totalLogCount = FILTERED_RESULT_COUNT,
@@ -96,7 +105,8 @@ internal object LogViewerFixtures {
         )
 
     /** Launch refresh in flight: skeletons, and no summary to report yet. */
-    val loadingState: LogViewerUiState = LogViewerUiState(refresh = LogViewerRefreshState.InProgress)
+    val loadingState: LogViewerUiState =
+        LogViewerUiState(refresh = LogViewerRefreshState.InProgress)
 
     /** A completed refresh with the whole snapshot matching. */
     fun allLogsState(): LogViewerUiState =
@@ -105,9 +115,13 @@ internal object LogViewerFixtures {
             summary = LogViewerSummaryState.Ready(allLogsSummary),
         )
 
+    /**
+     * One applied structured filter over the whole snapshot, which is also the only fixture that
+     * renders the Filter control's active-count badge.
+     */
     fun filteredState(): LogViewerUiState =
         allLogsState().copy(
-            query = FILTERED_QUERY,
+            filters = LogFilterSelection(tags = setOf(FILTERED_TAG)),
             summary = LogViewerSummaryState.Ready(filteredSummary),
         )
 
@@ -116,6 +130,14 @@ internal object LogViewerFixtures {
             query = NONMATCHING_QUERY,
             summary = LogViewerSummaryState.Ready(filteredEmptySummary),
         )
+
+    /**
+     * The app bar's search field revealed, over the unfiltered result.
+     *
+     * Deliberately with an empty query: expanding search is a visibility change and nothing else,
+     * so the sample that shows the field open must not also show a narrowed result.
+     */
+    fun searchExpandedState(): LogViewerUiState = allLogsState().copy(isSearchExpanded = true)
 
     /** A retryable launch failure the user has not dismissed, so the modal is up. */
     fun errorState(): LogViewerUiState = LogViewerUiState(refresh = LogViewerRefreshState.Failed())
@@ -156,15 +178,20 @@ internal object LogViewerFixtures {
 
             LogViewerFixture.FilteredEmpty -> pagingDataOf(emptyList())
 
+            LogViewerFixture.SearchExpanded -> pagingDataOf(allLogsItems)
+
             LogViewerFixture.StaleSnapshot -> pagingDataOf(allLogsItems)
 
             LogViewerFixture.AppendLoading -> pagingDataOf(allLogsItems, append = LoadState.Loading)
 
-            LogViewerFixture.AppendError -> pagingDataOf(allLogsItems, append = LoadState.Error(AppendFailure))
+            LogViewerFixture.AppendError -> pagingDataOf(allLogsItems, append = LoadState.Error(PagingFailure))
+
+            LogViewerFixture.PageRefreshError -> pagingDataOf(allLogsItems, refresh = LoadState.Error(PagingFailure))
         }
 
     private fun pagingDataOf(
         items: List<LogViewerListItem>,
+        refresh: LoadState = LoadState.NotLoading(endOfPaginationReached = true),
         append: LoadState = LoadState.NotLoading(endOfPaginationReached = true),
     ): Flow<PagingData<LogViewerListItem>> =
         flowOf(
@@ -172,15 +199,15 @@ internal object LogViewerFixtures {
                 data = items,
                 sourceLoadStates =
                     LoadStates(
-                        refresh = LoadState.NotLoading(endOfPaginationReached = true),
+                        refresh = refresh,
                         prepend = LoadState.NotLoading(endOfPaginationReached = true),
                         append = append,
                     ),
             ),
         )
 
-    /** Never surfaced: the append-failure UI reports its own copy rather than an exception. */
-    private object AppendFailure : Throwable("Fixture append failure")
+    /** Never surfaced: both Paging failure states report their own copy rather than an exception. */
+    private object PagingFailure : Throwable("Fixture paging failure")
 
     /** Legend order follows the wireframe: error-like severities first, then the rest. */
     private fun legendItems(
@@ -216,7 +243,7 @@ private val allLogsEntries: List<LogEntry> =
         entry("1709-45672", "17:09:45.672", Severity.WARN, "network", "High latency detected", 2_190),
     )
 
-// Every entry carries the `network` tag, so the sample stays consistent with FILTERED_QUERY.
+// Every entry carries the `network` tag, so the sample is exactly what FILTERED_TAG selects.
 private val filteredEntries: List<LogEntry> =
     listOf(
         entry("1711-58123", "17:11:58.123", Severity.ERROR, "network", "Connection timed out", 3_245),
@@ -270,8 +297,15 @@ internal enum class LogViewerFixture {
     Loading,
     Error,
     AllLogs,
+
+    /** One applied structured filter: the only fixture that renders the active-filter badge. */
     Filtered,
+
+    /** A search that matches nothing, so the field keeps its text above the no-results state. */
     FilteredEmpty,
+
+    /** The app bar's search field expanded over the unfiltered result. */
+    SearchExpanded,
 
     /** A dismissed refresh failure over the retained snapshot, where retry is all that is left. */
     StaleSnapshot,
@@ -281,6 +315,15 @@ internal enum class LogViewerFixture {
 
     /** Loaded rows plus a failed append: the rows stay, the footer offers Retry. */
     AppendError,
+
+    /**
+     * A failed Paging *refresh* over the rows the previous generation loaded.
+     *
+     * Distinct from [Error], which is the launch refresh failing to replace the snapshot at all:
+     * this one is the stored snapshot failing to be read for the active query, and it retries
+     * through Paging rather than through the repository.
+     */
+    PageRefreshError,
 }
 
 /** Resolves a [LogViewerFixture] into the bounded screen state half of the screen's input. */
@@ -298,7 +341,11 @@ internal fun logViewerFixtureState(fixture: LogViewerFixture): LogViewerUiState 
             LogViewerFixtures.staleSnapshotState()
         }
 
-        LogViewerFixture.AllLogs, LogViewerFixture.AppendLoading, LogViewerFixture.AppendError -> {
+        LogViewerFixture.AllLogs,
+        LogViewerFixture.AppendLoading,
+        LogViewerFixture.AppendError,
+        LogViewerFixture.PageRefreshError,
+        -> {
             LogViewerFixtures.allLogsState()
         }
 
@@ -308,6 +355,10 @@ internal fun logViewerFixtureState(fixture: LogViewerFixture): LogViewerUiState 
 
         LogViewerFixture.FilteredEmpty -> {
             LogViewerFixtures.filteredEmptyState()
+        }
+
+        LogViewerFixture.SearchExpanded -> {
+            LogViewerFixtures.searchExpandedState()
         }
     }
 

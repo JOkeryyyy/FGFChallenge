@@ -4,10 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -37,7 +35,6 @@ import kotlin.math.roundToInt
 
 private val RingSize = 72.dp
 private val RingStrokeWidth = 8.dp
-private val NarrowLegendThreshold = 380.dp
 private const val FULL_SWEEP = 360f
 
 /**
@@ -47,6 +44,10 @@ private const val FULL_SWEEP = 360f
  *
  * Everything it draws comes from [density]; it performs no severity arithmetic of its own, so the
  * ring and the legend always describe the same result set.
+ *
+ * The legend sits beside the ring at every width. One layout means the card keeps its height and
+ * its reading order wherever it is rendered, which matters more here than recovering a little
+ * horizontal room on the narrowest screens.
  */
 @Composable
 fun SeverityIndicator(
@@ -59,32 +60,16 @@ fun SeverityIndicator(
             .fillMaxWidth()
             .clearAndSetSemantics { contentDescription = description }
 
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        if (maxWidth < NarrowLegendThreshold) {
-            Column(
-                modifier = descriptionModifier,
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-            ) {
-                SeverityRing(density)
-                SeverityLegendGrid(
-                    legendItems = density.legendItems,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        } else {
-            Row(
-                modifier = descriptionModifier,
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-            ) {
-                SeverityRing(density)
-                SeverityLegendColumn(
-                    legendItems = density.legendItems,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
+    Row(
+        modifier = modifier.fillMaxWidth().then(descriptionModifier),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+    ) {
+        SeverityRing(density)
+        SeverityLegendColumn(
+            legendItems = density.legendItems,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -153,26 +138,6 @@ private fun SeverityLegendColumn(
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
         legendItems.forEach { item -> SeverityLegendRow(item) }
-    }
-}
-
-@Composable
-private fun SeverityLegendGrid(
-    legendItems: List<SeverityLegendItem>,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-        legendItems.chunked(2).forEach { pair ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
-            ) {
-                pair.forEach { item -> SeverityLegendRow(item, modifier = Modifier.weight(1f)) }
-                if (pair.size == 1) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-            }
-        }
     }
 }
 

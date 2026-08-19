@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Minimal manifest for the out-of-process Macrobenchmark test APK; it declares no components. -->
+<manifest />

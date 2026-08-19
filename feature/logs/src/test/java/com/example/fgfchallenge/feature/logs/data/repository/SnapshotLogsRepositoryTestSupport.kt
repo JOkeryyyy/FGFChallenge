@@ -30,7 +30,10 @@ internal fun runLogsRepositoryTest(
         val database = createInMemoryLogsDatabase(queryDispatcher)
         try {
             val dao = database.logsDao()
-            block(SnapshotLogsRepository(logsApi, dao, mappingDispatcher ?: queryDispatcher), dao)
+            // Assembled the way the shipping variants are: the real remote strategy behind the
+            // repository, so these tests keep exercising the production write path end to end.
+            val refresher = RemoteSnapshotRefresher(logsApi, dao, mappingDispatcher ?: queryDispatcher)
+            block(SnapshotLogsRepository(refresher, dao), dao)
         } finally {
             database.close()
         }

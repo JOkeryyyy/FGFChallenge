@@ -16,6 +16,13 @@ import com.example.fgfchallenge.core.designsystem.model.SeverityLegendItem
 import com.example.fgfchallenge.feature.logs.presentation.model.LogSortOrder
 import com.example.fgfchallenge.feature.logs.presentation.model.LogViewerListItem
 import com.example.fgfchallenge.feature.logs.presentation.model.toDensityUi
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerFixtures
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerRefreshState
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerSummaryState
+import com.example.fgfchallenge.feature.logs.presentation.ui.activeFilterCount
+import com.example.fgfchallenge.feature.logs.presentation.ui.hasNoMatches
+import com.example.fgfchallenge.feature.logs.presentation.ui.showsRefreshFailure
+import com.example.fgfchallenge.feature.logs.presentation.ui.showsStaleSnapshotNotice
 import org.junit.Test
 
 /** One header paired with the rows that follow it, which is what the flat list renders. */
@@ -175,10 +182,14 @@ class LogViewerFixturesTest {
     }
 
     @Test
-    fun `filtered state keeps the active query`() {
+    fun `filtered state applies one structured filter and reports it as active`() {
         val state = LogViewerFixtures.filteredState()
 
-        assertThat(state.query).isEqualTo(LogViewerFixtures.FILTERED_QUERY)
+        // Narrowed by a tag rather than by search text: the field searches message or ID only, so a
+        // sample of `network`-tagged rows can only be reached through the filter that selects them.
+        assertThat(state.query).isEmpty()
+        assertThat(state.filters.tags).isEqualTo(setOf(LogViewerFixtures.FILTERED_TAG))
+        assertThat(state.activeFilterCount).isEqualTo(1)
         assertThat(state.summary).isEqualTo(LogViewerSummaryState.Ready(LogViewerFixtures.filteredSummary))
         assertThat(LogViewerFixtures.FILTERED_RESULT_COUNT).isEqualTo(718)
         assertThat(LogViewerFixtures.filteredItems.filterIsInstance<LogViewerListItem.LogRow>()).hasSize(7)
@@ -193,6 +204,18 @@ class LogViewerFixturesTest {
         assertThat(state.summary).isEqualTo(LogViewerSummaryState.Ready(LogViewerFixtures.filteredEmptySummary))
         // Counted zero, not merely uncounted: this is the condition the no-results state waits for.
         assertThat(state.hasNoMatches).isTrue()
+    }
+
+    @Test
+    fun `the search expanded state shows the field without narrowing anything`() {
+        val state = LogViewerFixtures.searchExpandedState()
+
+        // Expanding search is a visibility change and nothing else, so the sample that shows the
+        // field open reports the same unfiltered result the collapsed one does.
+        assertThat(state.isSearchExpanded).isTrue()
+        assertThat(state.query).isEmpty()
+        assertThat(state.activeFilterCount).isEqualTo(0)
+        assertThat(state.summary).isEqualTo(LogViewerSummaryState.Ready(LogViewerFixtures.allLogsSummary))
     }
 
     @Test

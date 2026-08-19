@@ -1,6 +1,7 @@
 package com.example.fgfchallenge.feature.logs.presentation
 
 import app.cash.paparazzi.Paparazzi
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerFixture
 import org.junit.Rule
 import org.junit.Test
 

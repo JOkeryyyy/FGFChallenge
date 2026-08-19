@@ -18,7 +18,7 @@ This document resolves implementation-significant gaps in the original take-home
 | **Searchable fields** | “Search across logs” does not identify fields. | Free text searches `message` or `id` only. Tag and severity are available exclusively through structured filters. |
 | **Search semantics** | Fuzzy, tokenized, regex, wildcard, and semantic behavior are undefined. | Use case-insensitive literal substring matching. Escape SQLite wildcard characters so `%` and `_` remain literal input. Blank search is inactive. |
 | **Structured filters** | The brief does not define filter categories or combination rules. | Support tags, severity, AI-generated state, UTC date/time range, and inclusive latency range. Active categories combine with AND; selected tags and severities combine with OR/`IN`; inactive categories add no predicate. |
-| **Filter editing** | It is unclear whether partial edits query immediately. | Search remains search-as-you-type. Structured filter edits remain draft values until Apply; Clear All resets the draft to the unfiltered default. |
+| **Filter editing** | It is unclear whether partial edits query immediately. | Search remains search-as-you-type: the field updates on the keystroke, while the derived query waits for a short pause in typing (300 ms) so one word costs one Pager and one aggregate rather than one of each per character. Clearing the field commits immediately. Structured filter edits remain draft values until Apply, which is not delayed; Clear All resets the draft to the unfiltered default. The draft is owned by the filter sheet's own host rather than by screen state, so an edit recomposes only the sheet; Apply carries the finished selection out as the single committing action, and dismissal discards the draft without applying it. |
 | **Time range** | Time-zone, inclusivity, and date-only behavior are unspecified. | Interpret UI choices in UTC. Store one half-open interval; convert an inclusive end minute to the next minute as the exclusive bound, and include the complete selected day for a date-only end. |
 | **Latency range** | Inclusivity is unspecified. | Applied minimum and maximum latency are inclusive. The category is inactive when the full available range is selected or no constraint is applied. |
 | **Grouping** | Session or timestamp grouping is allowed without a required granularity. | Group displayed rows by UTC minute. Session grouping would produce one group for the supplied fixture and is not used. |
@@ -30,6 +30,7 @@ This document resolves implementation-significant gaps in the original take-home
 | **No-results timing** | Paging can temporarily have zero loaded rows while work is active. | Show no results only after the current aggregate query completes with total count zero. |
 | **Details lookup** | It is unclear whether details depend on loaded rows. | Resolve details by stable log ID through the repository so later-page rows remain selectable without retaining all rows in UI state. |
 | **UI quality** | “Pixel-perfect” has no supplied production design. | Follow `UIWireframe.png` as the behavioral low-fidelity contract. |
+| **Screen-level controls** | The wireframe arranges the title, search field, Filter button, and sort control as stacked rows, without stating that arrangement is required. | Collapse them into one pinned Material 3 small top app bar, which is the platform convention for screen-level commands and returns two rows of height to the list. All filter, search, sort, aggregate, Paging, and detail behavior is preserved; only the arrangement changes. |
 
 ## Canonical query semantics
 
@@ -119,11 +120,13 @@ Rapid search, filter, or sort replacement cancels obsolete work. Rows and summar
 
 ## Paging-aware UI state assumptions
 
-- `LogViewerUiState` contains bounded screen state only: immediate query text, applied filters, filter draft/visibility, sort, startup refresh state, aggregate summary, filter options, and selected-log state.
+- `LogViewerUiState` contains bounded screen state only: immediate query text, applied filters, filter sheet visibility, sort, startup refresh state, aggregate summary, filter options, and selected-log state. The sheet's uncommitted draft is not among them — it belongs to `LogFilterSheetHost`, kept in `rememberSaveable`, so editing a filter does not recompose the screen.
 - Paged rows travel separately as `Flow<PagingData<LogViewerListItem>>`.
 - Startup loading/error is distinct from Paging refresh and append states.
 - Append loading appears after retained rows; append failure preserves those rows and exposes retry at the boundary.
+- The app bar title reports both counts together — the rows Paging currently holds and the complete filtered result (`100 of 2,418 Logs`) — and shows `Counting logs…` until the active query's aggregate arrives, since a loaded figure paired with a total counted for previous criteria would be worse than showing neither.
 - Filter controls show an active-category count. Draft changes do not affect that count until Apply.
+- Search visibility is bounded UI state separate from the search text. Expanding or collapsing the field derives no new query and discards no text; a collapsed non-blank search is reported by an indicator on the search action.
 - The summary explicitly indicates that counts and density cover all matching records.
 - Minute headers remain regular list items and stay correct when a minute spans two pages.
 - Details-sheet visibility derives from selected-log state and supports close, swipe-down, and Back dismissal.

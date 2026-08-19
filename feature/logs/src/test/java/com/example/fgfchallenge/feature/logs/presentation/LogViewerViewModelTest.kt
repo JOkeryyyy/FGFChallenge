@@ -20,16 +20,24 @@ import com.example.fgfchallenge.feature.logs.data.model.LogSummary
 import com.example.fgfchallenge.feature.logs.data.model.Severity
 import com.example.fgfchallenge.feature.logs.presentation.model.LogSortOrder
 import com.example.fgfchallenge.feature.logs.presentation.model.LogViewerListItem
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerAction
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerFixtures
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerRefreshState
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerSummaryState
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerViewModel
+import com.example.fgfchallenge.feature.logs.presentation.ui.hasNoMatches
+import com.example.fgfchallenge.feature.logs.presentation.ui.showsRefreshFailure
+import com.example.fgfchallenge.feature.logs.presentation.ui.showsStaleSnapshotNotice
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import java.time.Instant
 
 /**
- * Behavior tests for `LogViewerViewModel`: what each [LogViewerAction] does to the single state
+ * Behavior tests for `LogViewerViewModel`: what each [com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerAction] does to the single state
  * value, which query value reaches the repository, what the paged stream produces from it, and —
  * just as importantly — what each leaves alone.
  *
@@ -170,6 +178,7 @@ class LogViewerViewModelTest {
     fun `a search change replaces the query both reads use`() =
         runViewModelTest {
             viewModel.onAction(LogViewerAction.QueryChanged("timeout"))
+            settleTypedText()
             viewModel.pagedLogs.asSnapshot()
 
             // The same value, not two equivalent ones assembled separately: this is what stops the
@@ -187,24 +196,137 @@ class LogViewerViewModelTest {
     }
 
     @Test
-    fun `a sort toggle re-queries with the new direction`() {
-        viewModel.onAction(LogViewerAction.SortOrderToggled)
-        assertThat(viewModel.state.value.sortOrder).isEqualTo(LogSortOrder.OldestFirst)
-        assertThat(repository.summaryQueries.last())
-            .isEqualTo(LogQuery(sortDirection = LogSortDirection.OldestFirst))
+    fun `a sort toggle re-queries the rows with the new direction`() =
+        runViewModelTest {
+            viewModel.onAction(LogViewerAction.SortOrderToggled)
+            assertThat(viewModel.state.value.sortOrder).isEqualTo(LogSortOrder.OldestFirst)
+            viewModel.pagedLogs.asSnapshot()
+
+            // The rows are what a direction changes, so the paged query is where it shows.
+            assertThat(repository.pagedQueries.last())
+                .isEqualTo(LogQuery(sortDirection = LogSortDirection.OldestFirst))
+
+            viewModel.onAction(LogViewerAction.SortOrderToggled)
+            assertThat(viewModel.state.value.sortOrder).isEqualTo(LogSortOrder.NewestFirst)
+        }
+
+    @Test
+    fun `a sort toggle does not recount the result`() {
+        repository.emitSummary(LogQuery(), LogSummary(totalCount = 5_000))
+        val countedBefore = repository.summaryQueries.size
+        assertThat(viewModel.state.value.summary).isInstanceOf(LogViewerSummaryState.Ready::class)
 
         viewModel.onAction(LogViewerAction.SortOrderToggled)
-        assertThat(viewModel.state.value.sortOrder).isEqualTo(LogSortOrder.NewestFirst)
+
+        // Reordering rows cannot change how many of each severity match, so the aggregate is
+        // neither restarted nor dropped to Pending — the total stays on screen while the list
+        // re-queries underneath it.
+        assertThat(repository.summaryQueries).hasSize(countedBefore)
+        assertThat(viewModel.state.value.summary).isInstanceOf(LogViewerSummaryState.Ready::class)
     }
 
     @Test
     fun `edits that normalize to the same query do not restart it`() {
         viewModel.onAction(LogViewerAction.QueryChanged("net"))
+        settleTypedText()
         viewModel.onAction(LogViewerAction.QueryChanged("net "))
+        settleTypedText()
         viewModel.onAction(LogViewerAction.QueryChanged("  net"))
+        settleTypedText()
 
         // The default query plus one for "net": the whitespace variants trim to the running query.
+        // Each one is settled separately, so this is the normalization rule doing the work rather
+        // than the debounce swallowing the edits.
         assertThat(repository.summaryQueries).hasSize(2)
+    }
+
+    @Test
+    fun `typing a word asks the database once, when the typing stops`() {
+        val typed = "timeout"
+        typed.indices.forEach { end -> viewModel.onAction(LogViewerAction.QueryChanged(typed.take(end + 1))) }
+
+        // Seven keystrokes, and so far nothing beyond the query the screen opened with: a partial
+        // word is text on its way somewhere, not criteria worth a Pager and a full-result count.
+        assertThat(repository.summaryQueries).containsExactly(LogQuery())
+        // The text itself is not held back — only what the database is asked for.
+        assertThat(viewModel.state.value.query).isEqualTo(typed)
+
+        settleTypedText()
+
+        assertThat(repository.summaryQueries).containsExactly(LogQuery(), LogQuery(literalSearch = typed))
+    }
+
+    @Test
+    fun `a deliberate commit made mid-typing is not held back by it`() =
+        runViewModelTest {
+            // Collected in the background rather than snapshotted: `asSnapshot` advances virtual
+            // time until the pager is idle, which would settle the very debounce this test is about.
+            backgroundScope.launch { viewModel.pagedLogs.collect {} }
+            mainDispatcherRule.testDispatcher.scheduler.runCurrent()
+
+            viewModel.onAction(LogViewerAction.QueryChanged("time"))
+            viewModel.onAction(LogViewerAction.SortOrderToggled)
+            // Runs what is already due without moving the clock into the debounce.
+            mainDispatcherRule.testDispatcher.scheduler.runCurrent()
+
+            // A sort toggle is a decision rather than a character on the way to one, so it
+            // re-queries at once — with the text the database has been given so far, which is still
+            // none. The rows are what a direction changes, so the paged query is where it shows.
+            assertThat(repository.pagedQueries.last())
+                .isEqualTo(LogQuery(sortDirection = LogSortDirection.OldestFirst))
+
+            settleTypedText()
+
+            // And the text that was still being typed then joins it, rather than being lost to it.
+            assertThat(repository.pagedQueries.last())
+                .isEqualTo(LogQuery(literalSearch = "time", sortDirection = LogSortDirection.OldestFirst))
+            // The aggregate follows the text but not the direction, so it is counted for the search
+            // alone — no second count for the same rows in the other order.
+            assertThat(repository.summaryQueries.last()).isEqualTo(LogQuery(literalSearch = "time"))
+        }
+
+    @Test
+    fun `clearing the field returns to the unfiltered list without a wait`() {
+        viewModel.onAction(LogViewerAction.QueryChanged("timeout"))
+        settleTypedText()
+
+        viewModel.onAction(LogViewerAction.QueryChanged(""))
+
+        // Clearing ends a search instead of composing one, so it is not made to sit out the pause
+        // showing results the user has just dismissed.
+        assertThat(repository.summaryQueries.last()).isEqualTo(LogQuery())
+    }
+
+    @Test
+    fun `showing and hiding the search field keeps the text the user typed`() {
+        viewModel.onAction(LogViewerAction.SearchOpened)
+        assertThat(viewModel.state.value.isSearchExpanded).isTrue()
+
+        viewModel.onAction(LogViewerAction.QueryChanged("timeout"))
+        viewModel.onAction(LogViewerAction.SearchDismissed)
+
+        // The text is the user's search, not the control's state. Collapsing withdraws the field
+        // only, so a search they never cleared goes on narrowing the result — which is exactly why
+        // the app bar's search action keeps an indicator once the field is out of sight.
+        assertThat(viewModel.state.value.isSearchExpanded).isFalse()
+        assertThat(viewModel.state.value.query).isEqualTo("timeout")
+    }
+
+    @Test
+    fun `search visibility alone neither re-queries nor drops the counted aggregate`() {
+        repository.emitSummary(LogQuery(), LogSummary(totalCount = 5_000))
+        val counted = viewModel.state.value.summary
+        assertThat(counted.readyTotalCount()).isEqualTo(5_000)
+
+        viewModel.onAction(LogViewerAction.SearchOpened)
+        viewModel.onAction(LogViewerAction.SearchDismissed)
+        settleTypedText()
+
+        // Nothing `toLogQuery` reads changed, so the running Pager and aggregate keep their results
+        // instead of being replaced by identical ones — and the total stays counted rather than
+        // returning to Pending, which is what `updateQueryInputs` would have done to it.
+        assertThat(repository.summaryQueries).containsExactly(LogQuery())
+        assertThat(viewModel.state.value.summary).isEqualTo(counted)
     }
 
     @Test
@@ -275,6 +397,7 @@ class LogViewerViewModelTest {
         assertThat(viewModel.state.value.summary).isEqualTo(LogViewerSummaryState.Pending)
 
         repository.emitSummary(LogQuery(literalSearch = "timeout"), LogSummary(totalCount = 718))
+        settleTypedText()
 
         assertThat(
             viewModel.state.value.summary
@@ -416,6 +539,7 @@ class LogViewerViewModelTest {
             }
 
             viewModel.onAction(LogViewerAction.QueryChanged("timeout"))
+            settleTypedText()
 
             assertThat(viewModel.pagedLogs.asSnapshot().logRowIds()).containsExactly("match")
         }
@@ -467,6 +591,17 @@ class LogViewerViewModelTest {
      * while waiting on the other and simply hang.
      */
     private fun runViewModelTest(body: suspend TestScope.() -> Unit) = runTest(mainDispatcherRule.testDispatcher.scheduler, testBody = body)
+
+    /**
+     * Advances past the pause the ViewModel waits out before typed text reaches the database.
+     *
+     * The wait is virtual, so this costs nothing in wall-clock time; what it costs is that a test
+     * about search has to say when the user stopped typing, which is the point — a test that
+     * asserted a query without this would be asserting the keystroke behavior that was removed.
+     */
+    private fun settleTypedText() {
+        mainDispatcherRule.testDispatcher.scheduler.advanceUntilIdle()
+    }
 
     private fun List<LogViewerListItem>.logRowIds(): List<String> = filterIsInstance<LogViewerListItem.LogRow>().map { it.row.id }
 

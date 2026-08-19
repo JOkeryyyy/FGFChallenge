@@ -9,11 +9,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.example.fgfchallenge.core.designsystem.theme.FGFChallengeTheme
-import com.example.fgfchallenge.feature.logs.presentation.LogViewerFixture
-import com.example.fgfchallenge.feature.logs.presentation.LogViewerScreen
-import com.example.fgfchallenge.feature.logs.presentation.LogViewerViewModel
-import com.example.fgfchallenge.feature.logs.presentation.logViewerFixtureItems
-import com.example.fgfchallenge.feature.logs.presentation.logViewerFixtureState
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogFilterSheetHost
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerAction
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerFixture
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerScreen
+import com.example.fgfchallenge.feature.logs.presentation.ui.LogViewerViewModel
+import com.example.fgfchallenge.feature.logs.presentation.ui.logViewerFixtureItems
+import com.example.fgfchallenge.feature.logs.presentation.ui.logViewerFixtureState
 
 /**
  * The log viewer's only public entry point, composed by `:app`.
@@ -30,6 +32,13 @@ import com.example.fgfchallenge.feature.logs.presentation.logViewerFixtureState
  * `collectAsStateWithLifecycle`, and the paged rows through `collectAsLazyPagingItems`, which keeps
  * Paging in charge of what is materialized. The alternate screen states remain reachable through
  * this file's previews rather than an in-app selector.
+ *
+ * The filter sheet is composed here as the screen's *sibling* rather than from inside it, and that
+ * placement is load-bearing. `LogFilterSheetHost` owns the uncommitted edit, so a chip tap or a
+ * latency drag recomposes only the host: this function re-runs, but `state` and `logs` are the same
+ * instances it was already holding, so `LogViewerScreen` skips — and with it the `Scaffold`, the
+ * summary card, and the row list. Composing the sheet inside the screen would put the edit back in
+ * the screen's own scope and undo that.
  */
 @Composable
 fun LogsFeature(modifier: Modifier = Modifier) {
@@ -42,6 +51,14 @@ fun LogsFeature(modifier: Modifier = Modifier) {
         onAction = viewModel::onAction,
         modifier = modifier,
     )
+    if (state.isFilterSheetOpen) {
+        LogFilterSheetHost(
+            appliedFilters = state.filters,
+            options = state.filterOptions,
+            onApply = { selection -> viewModel.onAction(LogViewerAction.FiltersApplied(selection)) },
+            onDismissRequest = { viewModel.onAction(LogViewerAction.FilterSheetDismissed) },
+        )
+    }
 }
 
 @Composable
@@ -109,6 +126,10 @@ private fun PopulatedContentNarrowPreview() = LogViewerFixturePreview(LogViewerF
 @Composable
 private fun PopulatedContentWidePreview() = LogViewerFixturePreview(LogViewerFixture.AllLogs, darkTheme = false)
 
+@Preview(name = "Search expanded light", widthDp = 360, heightDp = 640)
+@Composable
+private fun SearchExpandedLightPreview() = LogViewerFixturePreview(LogViewerFixture.SearchExpanded, darkTheme = false)
+
 @Preview(name = "Stale snapshot light", widthDp = 360, heightDp = 640)
 @Composable
 private fun StaleSnapshotLightPreview() = LogViewerFixturePreview(LogViewerFixture.StaleSnapshot, darkTheme = false)
@@ -124,3 +145,7 @@ private fun AppendLoadingPreview() = LogViewerFixturePreview(LogViewerFixture.Ap
 @Preview(name = "Append retry 360dp", widthDp = 360, heightDp = 640)
 @Composable
 private fun AppendErrorPreview() = LogViewerFixturePreview(LogViewerFixture.AppendError, darkTheme = false)
+
+@Preview(name = "Page refresh retry 360dp", widthDp = 360, heightDp = 640)
+@Composable
+private fun PageRefreshErrorPreview() = LogViewerFixturePreview(LogViewerFixture.PageRefreshError, darkTheme = false)

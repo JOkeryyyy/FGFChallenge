@@ -2,9 +2,11 @@ package com.example.fgfchallenge.feature.logs.data.repository
 
 import androidx.paging.testing.asSnapshot
 import assertk.assertThat
+import assertk.assertions.hasSize
 import assertk.assertions.isEqualTo
 import assertk.assertions.isNotNull
 import com.example.fgfchallenge.feature.logs.data.error.Result
+import com.example.fgfchallenge.feature.logs.data.local.LogEntity
 import com.example.fgfchallenge.feature.logs.data.local.LogsDao
 import com.example.fgfchallenge.feature.logs.data.local.LogsTestFixture.SNAPSHOT
 import com.example.fgfchallenge.feature.logs.data.model.LogQuery
@@ -46,6 +48,26 @@ class SnapshotLogsRepositoryQueryTest {
             val rows = repository.pagedLogs(query).asSnapshot()
 
             assertThat(rows.map { it.id }).isEqualTo(listOf("log-1", "log-2", "log-3", "log-4", "log-5", "log-6"))
+        }
+
+    /**
+     * The Pager is deliberately unbounded ([PagingConfig.MAX_SIZE_UNBOUNDED]), so a scroll to the
+     * end keeps every page it loaded rather than dropping the ones behind it. What this pins is
+     * that choice: the working set is bounded by the snapshot, not by a cap, and scrolling back up
+     * therefore re-queries nothing.
+     */
+    @Test
+    fun `paged logs keep every loaded page after a long scroll`() =
+        runLogsRepositoryTest(UnusedLogsApi) { repository, dao ->
+            dao.replaceSnapshot(largeSnapshot())
+
+            val presentedRows =
+                repository.pagedLogs(LogQuery()).asSnapshot {
+                    appendScrollWhile { entry -> entry.id != OLDEST_LARGE_SNAPSHOT_ID }
+                }
+
+            assertThat(presentedRows).hasSize(LARGE_SNAPSHOT_SIZE)
+            assertThat(presentedRows.last().id).isEqualTo(OLDEST_LARGE_SNAPSHOT_ID)
         }
 
     @Test
@@ -102,6 +124,25 @@ class SnapshotLogsRepositoryQueryTest {
             dao.replaceSnapshot(SNAPSHOT)
             block(repository, dao)
         }
+
+    private fun largeSnapshot(): List<LogEntity> =
+        (0 until LARGE_SNAPSHOT_SIZE).map { index ->
+            LogEntity(
+                id = "large-log-$index",
+                timestampEpochMillis = index.toLong(),
+                severity = "INFO",
+                tag = "paging",
+                message = "Large paging fixture row $index",
+                latencyMs = 1,
+                isAiGenerated = false,
+                sessionId = "paging-test-session",
+            )
+        }
+
+    private companion object {
+        const val LARGE_SNAPSHOT_SIZE = 700
+        const val OLDEST_LARGE_SNAPSHOT_ID = "large-log-0"
+    }
 }
 
 private object UnusedLogsApi : LogsApi {
