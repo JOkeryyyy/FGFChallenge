@@ -63,9 +63,10 @@ internal class SnapshotLogsRepository
                         // matches; Paging would otherwise load three pages up front.
                         initialLoadSize = PAGE_SIZE,
                         prefetchDistance = PREFETCH_DISTANCE,
-                        // Keep five pages while scrolling. This is well above Paging's required
-                        // pageSize + (2 * prefetchDistance) minimum, so old pages can be dropped
-                        // without immediately being reloaded.
+                        // Unbounded on purpose: a bounded cap makes Paging drop offscreen pages
+                        // and reload them from Room on the way back, so scrolling up re-queries
+                        // rows the process already holds. The snapshot is a single launch import
+                        // of a known size, so the working set is bounded by the result instead.
                         maxSize = MAX_CACHED_ROWS,
                         // Placeholders would require a full COUNT per generation and would put
                         // unloaded rows in the list; the summary reports the real total instead.
@@ -100,7 +101,7 @@ internal class SnapshotLogsRepository
         private companion object {
             /** `ARCHITECTURE.md` fixes these: 100 rows per page, next page fetched 25 rows out. */
             const val PAGE_SIZE = 100
-            const val PREFETCH_DISTANCE = 30
+            const val PREFETCH_DISTANCE = 25
             const val MAX_CACHED_ROWS = PagingConfig.MAX_SIZE_UNBOUNDED
         }
     }

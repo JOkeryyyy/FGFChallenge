@@ -49,7 +49,7 @@ internal sealed interface LogViewerListItem {
      *
      * It carries only what the *list* renders. The details sheet's values are deliberately absent:
      * selection resolves them from the repository by log ID, so a row stays selectable after Paging
-     * has evicted its page, and a loaded page never holds a second display model per row.
+     * has discarded its page, and a loaded page never holds a second display model per row.
      */
     @Immutable
     data class LogRow(

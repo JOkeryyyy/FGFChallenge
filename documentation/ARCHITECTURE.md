@@ -364,11 +364,11 @@ Repository Pager configuration is:
 pageSize = 100
 initialLoadSize = 100
 prefetchDistance = 25
-maxSize = 500
+maxSize = PagingConfig.MAX_SIZE_UNBOUNDED
 enablePlaceholders = false
 ```
 
-The initial page therefore contains the newest 100 matches, or all matches when fewer exist. The next page is requested before the final 25 loaded rows are exhausted. The 500-row maximum targets a five-page active window and is above Paging's required 150-row minimum (`pageSize + 2 * prefetchDistance`), so old pages can be evicted and later reloaded from Room. Paging treats the cap as best effort to preserve its prefetch window, but the working set no longer grows with the complete result. Room supplies a `PagingSource`; snapshot replacement and query replacement invalidate obsolete sources.
+The initial page therefore contains the newest 100 matches, or all matches when fewer exist. The next page is requested before the final 25 loaded rows are exhausted. `maxSize` is left unbounded: a cap makes Paging drop offscreen pages and re-query them from Room when the user scrolls back, and the snapshot is one bounded launch import rather than an open-ended remote feed, so the working set is bounded by the filtered result instead of by a configured maximum. The cost is that a full scroll of a large result retains every page it loaded; that is accepted for this prototype. Room supplies a `PagingSource`; snapshot replacement and query replacement invalidate obsolete sources.
 
 ### Aggregates and options
 
@@ -422,7 +422,7 @@ Flow<PagingData<LogViewerListItem>>
     display-ready log rows
 ```
 
-`LogViewerUiState` never contains `PagingData`, the complete database, every match, or a materialized copy of loaded rows. The separate Paging flow is the deliberate exception to “all screen values in one state object” because Paging owns and evicts its bounded working set.
+`LogViewerUiState` never contains `PagingData`, the complete database, every match, or a materialized copy of loaded rows. The separate Paging flow is the deliberate exception to “all screen values in one state object” because Paging owns its working set and the pages within it.
 
 The filter sheet's *uncommitted draft* is the second deliberate exception, and is owned by `LogFilterSheetHost` rather than by this state object. Holding it here published a new `LogViewerUiState` for every chip tap and every frame of a latency drag, which invalidated the screen, its `Scaffold`, and the row `LazyColumn` for a value none of them render — the draft is read only by the sheet, so it is hoisted only as far as the sheet. What remains in state is the sheet's visibility, because that is a screen-level decision.
 

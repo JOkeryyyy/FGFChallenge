@@ -50,8 +50,14 @@ class SnapshotLogsRepositoryQueryTest {
             assertThat(rows.map { it.id }).isEqualTo(listOf("log-1", "log-2", "log-3", "log-4", "log-5", "log-6"))
         }
 
+    /**
+     * The Pager is deliberately unbounded ([PagingConfig.MAX_SIZE_UNBOUNDED]), so a scroll to the
+     * end keeps every page it loaded rather than dropping the ones behind it. What this pins is
+     * that choice: the working set is bounded by the snapshot, not by a cap, and scrolling back up
+     * therefore re-queries nothing.
+     */
     @Test
-    fun `paged logs evict offscreen pages after a long scroll`() =
+    fun `paged logs keep every loaded page after a long scroll`() =
         runLogsRepositoryTest(UnusedLogsApi) { repository, dao ->
             dao.replaceSnapshot(largeSnapshot())
 
@@ -60,7 +66,8 @@ class SnapshotLogsRepositoryQueryTest {
                     appendScrollWhile { entry -> entry.id != OLDEST_LARGE_SNAPSHOT_ID }
                 }
 
-            assertThat(presentedRows).hasSize(MAX_PRESENTED_ROWS)
+            assertThat(presentedRows).hasSize(LARGE_SNAPSHOT_SIZE)
+            assertThat(presentedRows.last().id).isEqualTo(OLDEST_LARGE_SNAPSHOT_ID)
         }
 
     @Test
@@ -135,7 +142,6 @@ class SnapshotLogsRepositoryQueryTest {
     private companion object {
         const val LARGE_SNAPSHOT_SIZE = 700
         const val OLDEST_LARGE_SNAPSHOT_ID = "large-log-0"
-        const val MAX_PRESENTED_ROWS = 500
     }
 }
 

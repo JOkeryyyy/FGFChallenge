@@ -14,8 +14,8 @@ import com.example.fgfchallenge.feature.logs.presentation.toLogQuery
  * `LogViewerViewModel` and rendered by `LogViewerScreen`.
  *
  * Bounded is the defining property. The result rows are not here and never will be — they travel
- * separately as `Flow<PagingData<LogViewerListItem>>`, because Paging owns and evicts its own
- * working set and a state value cannot. What is left is small and fixed in size regardless of how
+ * separately as `Flow<PagingData<LogViewerListItem>>`, because Paging owns its own working set and
+ * a state value cannot. What is left is small and fixed in size regardless of how
  * many logs the snapshot holds: the query inputs, whether each sheet is showing, the snapshot
  * metadata the filter controls are built from, the active query's aggregate, the selected log, and
  * how the launch refresh went.

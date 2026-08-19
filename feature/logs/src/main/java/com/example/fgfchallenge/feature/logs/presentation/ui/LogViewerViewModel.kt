@@ -47,8 +47,8 @@ import javax.inject.Inject
  * one-screen prototype has nothing to reuse them for.
  *
  * Two streams leave this class rather than one, and that is deliberate. [state] holds only bounded
- * screen state; [pagedLogs] carries the rows, because Paging owns and evicts its own working set
- * and putting `PagingData` in an immutable state value would defeat that. Nothing here is sized by
+ * screen state; [pagedLogs] carries the rows, because Paging owns its own working set and putting
+ * `PagingData` in an immutable state value would defeat that. Nothing here is sized by
  * the snapshot or by the number of matches — not the state, not the details lookup, not the
  * transformation that groups rows into minutes.
  *
@@ -265,10 +265,10 @@ internal class LogViewerViewModel
         /**
          * Resolves the tapped row's details from the repository by ID.
          *
-         * By ID rather than by scanning what the list currently holds: Paging evicts pages as the
-         * user scrolls, so a row that is on screen is not necessarily a row whose data is still in
-         * memory, and a lookup that depended on that would fail exactly where the paged list is
-         * doing its job. An ID the snapshot no longer holds, or a failed read, leaves the current
+         * By ID rather than by scanning what the list currently holds: the list carries only what it
+         * renders, and its pages are discarded whenever the snapshot or the query invalidates the
+         * source, so a row that is on screen is not necessarily a row whose data is still in memory.
+         * A lookup that depended on that would fail exactly where the paged list is doing its job. An ID the snapshot no longer holds, or a failed read, leaves the current
          * selection untouched — a stale tap arriving after the list changed must not dismiss a
          * sheet the user is reading.
          */

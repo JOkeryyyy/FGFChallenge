@@ -174,7 +174,8 @@ private fun LazyListScope.pagedLogItems(
                 )
             }
 
-            // Placeholders are disabled, so a null is only ever an item being evicted mid-frame.
+            // Placeholders are disabled, so a null is only ever an item dropped mid-frame, which
+            // happens when a snapshot replacement or a new query invalidates the source.
             null -> {
                 Unit
             }
