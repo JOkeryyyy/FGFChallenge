@@ -170,6 +170,45 @@ class LogViewerFixturesTest {
     }
 
     @Test
+    fun `the collapsed fixture keeps every heading and withholds only its own group's rows`() {
+        val groups = LogViewerFixtures.collapsedGroupItems.minuteGroups()
+
+        // Same three headings as the populated fixture — collapsing a group must not remove it —
+        // with only the collapsed group's rows gone.
+        assertThat(groups.map { (header, _) -> header.minute }).containsExactly("17:11", "17:10", "17:09")
+        assertThat(groups.map { (_, rows) -> rows.size }).containsExactly(0, 5, 1)
+    }
+
+    @Test
+    fun `only the collapsed fixture's own heading reports being collapsed`() {
+        val collapsedByMinute =
+            LogViewerFixtures.collapsedGroupItems
+                .filterIsInstance<LogViewerListItem.MinuteHeader>()
+                .associate { it.utcMinuteId to it.isCollapsed }
+
+        assertThat(collapsedByMinute).isEqualTo(
+            mapOf(
+                LogViewerFixtures.COLLAPSED_MINUTE_ID to true,
+                "2025-05-22T17:10Z" to false,
+                "2025-05-22T17:09Z" to false,
+            ),
+        )
+    }
+
+    /** Collapse changes appearance, not identity: a keyed list must reuse the header it flags. */
+    @Test
+    fun `collapsing a heading changes neither its key nor its content type`() {
+        val expanded = LogViewerFixtures.allLogsItems.headerFor(LogViewerFixtures.COLLAPSED_MINUTE_ID)
+        val collapsed = LogViewerFixtures.collapsedGroupItems.headerFor(LogViewerFixtures.COLLAPSED_MINUTE_ID)
+
+        assertThat(collapsed.isCollapsed).isTrue()
+        assertThat(expanded.isCollapsed).isFalse()
+        assertThat(collapsed.stableKey).isEqualTo(expanded.stableKey)
+        assertThat(collapsed.contentType).isEqualTo(expanded.contentType)
+        assertThat(collapsed.minute).isEqualTo(expanded.minute)
+    }
+
+    @Test
     fun `all logs state starts blank, newest first, unselected, and reports every record`() {
         val state = LogViewerFixtures.allLogsState()
 
@@ -253,7 +292,13 @@ class LogViewerFixturesTest {
         listOf(
             LogViewerFixtures.allLogsItems,
             LogViewerFixtures.filteredItems,
+            // Included so the key, namespacing, and grouping properties are asserted for a list a
+            // collapse has been applied to as well as for untouched ones.
+            LogViewerFixtures.collapsedGroupItems,
         )
+
+    private fun List<LogViewerListItem>.headerFor(utcMinuteId: String): LogViewerListItem.MinuteHeader =
+        filterIsInstance<LogViewerListItem.MinuteHeader>().single { it.utcMinuteId == utcMinuteId }
 
     private fun List<LogViewerListItem>.minuteGroups(): List<MinuteGroup> {
         val groups = mutableListOf<Pair<LogViewerListItem.MinuteHeader, MutableList<LogViewerListItem.LogRow>>>()

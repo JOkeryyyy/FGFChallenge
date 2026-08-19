@@ -11,6 +11,7 @@ import assertk.assertions.isFalse
 import assertk.assertions.isInstanceOf
 import assertk.assertions.isNotNull
 import assertk.assertions.isNull
+import assertk.assertions.isSameInstanceAs
 import assertk.assertions.isTrue
 import com.example.fgfchallenge.feature.logs.data.error.LogsDataError
 import com.example.fgfchallenge.feature.logs.data.error.Result
@@ -583,6 +584,120 @@ class LogViewerViewModelTest {
             assertThat(row.row.time).isEqualTo("58.123")
         }
 
+    // ---- Minute group collapse ----------------------------------------------------------------
+
+    @Test
+    fun `collapsing a minute withholds its rows and keeps its header`() =
+        runViewModelTest {
+            repository.rowsFor = { threeRowsAcrossTwoMinutes() }
+
+            viewModel.onAction(LogViewerAction.MinuteGroupToggled("2025-05-22T17:11Z"))
+
+            assertThat(viewModel.pagedLogs.asSnapshot().map { it.stableKey }).containsExactly(
+                "minute:2025-05-22T17:11Z",
+                "minute:2025-05-22T17:10Z",
+                "log:c",
+            )
+        }
+
+    @Test
+    fun `only the collapsed minute's header reports being collapsed`() =
+        runViewModelTest {
+            repository.rowsFor = { threeRowsAcrossTwoMinutes() }
+
+            viewModel.onAction(LogViewerAction.MinuteGroupToggled("2025-05-22T17:11Z"))
+
+            val collapsedByMinute =
+                viewModel.pagedLogs
+                    .asSnapshot()
+                    .filterIsInstance<LogViewerListItem.MinuteHeader>()
+                    .associate { it.utcMinuteId to it.isCollapsed }
+
+            assertThat(collapsedByMinute).isEqualTo(
+                mapOf("2025-05-22T17:11Z" to true, "2025-05-22T17:10Z" to false),
+            )
+        }
+
+    @Test
+    fun `collapsing a minute leaves every other group untouched`() =
+        runViewModelTest {
+            repository.rowsFor = { threeRowsAcrossTwoMinutes() }
+
+            viewModel.onAction(LogViewerAction.MinuteGroupToggled("2025-05-22T17:10Z"))
+
+            assertThat(viewModel.pagedLogs.asSnapshot().logRowIds()).containsExactly("a", "b")
+        }
+
+    @Test
+    fun `toggling a collapsed minute a second time restores exactly its rows`() =
+        runViewModelTest {
+            repository.rowsFor = { threeRowsAcrossTwoMinutes() }
+
+            viewModel.onAction(LogViewerAction.MinuteGroupToggled("2025-05-22T17:11Z"))
+            viewModel.onAction(LogViewerAction.MinuteGroupToggled("2025-05-22T17:11Z"))
+
+            assertThat(viewModel.pagedLogs.asSnapshot().map { it.stableKey }).containsExactly(
+                "minute:2025-05-22T17:11Z",
+                "log:a",
+                "log:b",
+                "minute:2025-05-22T17:10Z",
+                "log:c",
+            )
+        }
+
+    /**
+     * A minute ID is an absolute instant, so the group a narrower query hid and a wider one brought
+     * back is the same group the user collapsed. Resetting on a query change would silently expand
+     * groups the user never touched.
+     */
+    @Test
+    fun `a collapsed minute is still collapsed after the query changes`() =
+        runViewModelTest {
+            repository.rowsFor = { threeRowsAcrossTwoMinutes() }
+
+            viewModel.onAction(LogViewerAction.MinuteGroupToggled("2025-05-22T17:11Z"))
+            viewModel.onAction(LogViewerAction.QueryChanged("timeout"))
+            settleTypedText()
+
+            assertThat(viewModel.pagedLogs.asSnapshot().logRowIds()).containsExactly("c")
+        }
+
+    /**
+     * The property the whole design rests on: collapse is not screen state. If it were published in
+     * `LogViewerUiState`, every toggle would recompose the app bar and the summary card for a value
+     * neither renders — the same cost that moved the filter sheet's draft out of the ViewModel.
+     */
+    @Test
+    fun `toggling a minute publishes no new screen state`() =
+        runViewModelTest {
+            repository.rowsFor = { threeRowsAcrossTwoMinutes() }
+            val before = viewModel.state.value
+
+            viewModel.onAction(LogViewerAction.MinuteGroupToggled("2025-05-22T17:11Z"))
+
+            assertThat(viewModel.state.value).isSameInstanceAs(before)
+        }
+
+    /**
+     * Collapse is presentation, not criteria. A toggle that reached `LogQuery` would restart the
+     * Pager and the full-result aggregate, and the summary would stop describing the whole filtered
+     * result — a collapsed group is still a match.
+     */
+    @Test
+    fun `toggling a minute starts no new query and no new count`() =
+        runViewModelTest {
+            repository.rowsFor = { threeRowsAcrossTwoMinutes() }
+            viewModel.pagedLogs.asSnapshot()
+            val pagedBefore = repository.pagedQueries.size
+            val summariesBefore = repository.summaryQueries.size
+
+            viewModel.onAction(LogViewerAction.MinuteGroupToggled("2025-05-22T17:11Z"))
+            viewModel.pagedLogs.asSnapshot()
+
+            assertThat(repository.pagedQueries).hasSize(pagedBefore)
+            assertThat(repository.summaryQueries).hasSize(summariesBefore)
+        }
+
     /**
      * Runs a test body on the same scheduler the rule installs as `Dispatchers.Main`.
      *
@@ -604,6 +719,14 @@ class LogViewerViewModelTest {
     }
 
     private fun List<LogViewerListItem>.logRowIds(): List<String> = filterIsInstance<LogViewerListItem.LogRow>().map { it.row.id }
+
+    /** Two groups, so a collapse test can assert what it hid *and* what it left alone. */
+    private fun threeRowsAcrossTwoMinutes() =
+        listOf(
+            testLogEntry("a", timestamp = "2025-05-22T17:11:58.123Z"),
+            testLogEntry("b", timestamp = "2025-05-22T17:11:11.098Z"),
+            testLogEntry("c", timestamp = "2025-05-22T17:10:59.384Z"),
+        )
 
     private fun LogViewerSummaryState.readyTotalCount(): Int? = (this as? LogViewerSummaryState.Ready)?.summary?.totalLogCount
 }

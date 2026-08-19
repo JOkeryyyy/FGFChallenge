@@ -14,9 +14,11 @@ import com.example.fgfchallenge.feature.logs.data.model.Severity
 import com.example.fgfchallenge.feature.logs.presentation.model.LogFilterSelection
 import com.example.fgfchallenge.feature.logs.presentation.model.LogViewerListItem
 import com.example.fgfchallenge.feature.logs.presentation.model.SeveritySummaryUi
+import com.example.fgfchallenge.feature.logs.presentation.model.isHiddenBy
 import com.example.fgfchallenge.feature.logs.presentation.model.minuteHeaderBetween
 import com.example.fgfchallenge.feature.logs.presentation.model.toListItem
 import com.example.fgfchallenge.feature.logs.presentation.model.toLogDetailsUi
+import com.example.fgfchallenge.feature.logs.presentation.model.withCollapsedState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import java.time.Instant
@@ -55,6 +57,9 @@ internal object LogViewerFixtures {
 
     /** The payload carries one session for the whole response, so every entry reports the same ID. */
     const val SESSION_ID: String = "sess-7f3a9b21-7cd4-4d6d-9a12-3f5e7d9a1b2c"
+
+    /** The first group of the populated fixture, which [collapsedGroupItems] is collapsed on. */
+    const val COLLAPSED_MINUTE_ID: String = "2025-05-22T17:11Z"
 
     /** The complete dataset: 1,039 ERROR + 1,011 FATAL of 5,000 entries, so 41% error density. */
     val allLogsSummary: SeveritySummaryUi =
@@ -156,6 +161,16 @@ internal object LogViewerFixtures {
 
     val allLogsItems: List<LogViewerListItem> = allLogsEntries.toGroupedItems()
 
+    /**
+     * [allLogsItems] with its first minute collapsed, through the same two functions the ViewModel
+     * applies to the paged stream — so the golden pins the real rule rather than a hand-written
+     * list that merely looks like its result.
+     */
+    val collapsedGroupItems: List<LogViewerListItem> =
+        allLogsItems
+            .filterNot { it.isHiddenBy(setOf(COLLAPSED_MINUTE_ID)) }
+            .map { it.withCollapsedState(setOf(COLLAPSED_MINUTE_ID)) }
+
     val filteredItems: List<LogViewerListItem> = filteredEntries.toGroupedItems()
 
     /**
@@ -181,6 +196,8 @@ internal object LogViewerFixtures {
             LogViewerFixture.SearchExpanded -> pagingDataOf(allLogsItems)
 
             LogViewerFixture.StaleSnapshot -> pagingDataOf(allLogsItems)
+
+            LogViewerFixture.CollapsedGroup -> pagingDataOf(collapsedGroupItems)
 
             LogViewerFixture.AppendLoading -> pagingDataOf(allLogsItems, append = LoadState.Loading)
 
@@ -310,6 +327,9 @@ internal enum class LogViewerFixture {
     /** A dismissed refresh failure over the retained snapshot, where retry is all that is left. */
     StaleSnapshot,
 
+    /** The unfiltered result with its first minute group collapsed, so its rows are withheld. */
+    CollapsedGroup,
+
     /** Loaded rows plus a page being appended, which no settled fixture can show. */
     AppendLoading,
 
@@ -345,6 +365,9 @@ internal fun logViewerFixtureState(fixture: LogViewerFixture): LogViewerUiState 
         LogViewerFixture.AppendLoading,
         LogViewerFixture.AppendError,
         LogViewerFixture.PageRefreshError,
+        // Collapse changes nothing the screen state holds — that is the point of the design — so
+        // this fixture differs from AllLogs only in its rows.
+        LogViewerFixture.CollapsedGroup,
         -> {
             LogViewerFixtures.allLogsState()
         }
